@@ -116,7 +116,18 @@ export function ToolLabel({ toolName, toolInput, workingDirectory, onClick }: To
       case 'exit_plan_mode':
       case 'ExitPlanMode':
         return <span className="font-semibold">Plan</span>;
-      
+
+      case 'AskUserQuestion':
+      case 'mcp__cui-permissions__ask_user_question': {
+        const questionCount = Array.isArray(toolInput.questions) ? toolInput.questions.length : 0;
+        return (
+          <>
+            <span className="font-semibold">Questions</span>
+            <span className="font-normal">({questionCount} {questionCount === 1 ? 'question' : 'questions'})</span>
+          </>
+        );
+      }
+
       default:
         // Fallback for any unspecified tool
         return (

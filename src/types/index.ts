@@ -289,6 +289,17 @@ export interface FileSystemReadResponse {
   encoding: string;
 }
 
+// Create directory types
+export interface CreateDirectoryRequest {
+  path: string;
+}
+
+export interface CreateDirectoryResponse {
+  success: boolean;
+  path: string;
+  error?: string;
+}
+
 // Session Info Database types for lowdb
 export interface SessionInfo {
   custom_name: string;          // Custom name for the session, default: ""

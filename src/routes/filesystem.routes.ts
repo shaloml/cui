@@ -1,10 +1,12 @@
 import { Router, Request } from 'express';
-import { 
+import {
   CUIError,
   FileSystemListQuery,
   FileSystemListResponse,
   FileSystemReadQuery,
-  FileSystemReadResponse 
+  FileSystemReadResponse,
+  CreateDirectoryRequest,
+  CreateDirectoryResponse
 } from '@/types/index.js';
 import { RequestWithRequestId } from '@/types/express.js';
 import { FileSystemService } from '@/services/file-system-service.js';
@@ -98,6 +100,41 @@ export function createFileSystemRoutes(
       logger.debug('Read file failed', {
         requestId,
         path: req.query.path,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      next(error);
+    }
+  });
+
+  // Create directory
+  router.post('/create-directory', async (req: Request<Record<string, never>, CreateDirectoryResponse, CreateDirectoryRequest> & RequestWithRequestId, res, next) => {
+    const requestId = req.requestId;
+    logger.debug('Create directory request', {
+      requestId,
+      path: req.body.path
+    });
+
+    try {
+      // Validate required parameters
+      if (!req.body.path) {
+        throw new CUIError('MISSING_PATH', 'path in request body is required', 400);
+      }
+
+      const result = await fileSystemService.createDirectory(req.body.path);
+
+      logger.debug('Directory created successfully', {
+        requestId,
+        path: result.path
+      });
+
+      res.json({
+        success: result.success,
+        path: result.path
+      });
+    } catch (error) {
+      logger.debug('Create directory failed', {
+        requestId,
+        path: req.body.path,
         error: error instanceof Error ? error.message : String(error)
       });
       next(error);

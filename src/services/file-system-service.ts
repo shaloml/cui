@@ -159,6 +159,73 @@ export class FileSystemService {
   }
 
   /**
+   * Create a new directory with security checks
+   */
+  async createDirectory(requestedPath: string): Promise<{ success: boolean; path: string }> {
+    this.logger.debug('Create directory requested', { requestedPath });
+
+    try {
+      // Validate and normalize path
+      const safePath = await this.validatePathForCreate(requestedPath);
+
+      // Check if path already exists
+      try {
+        await fs.stat(safePath);
+        throw new CUIError('PATH_EXISTS', `Path already exists: ${requestedPath}`, 400);
+      } catch (error) {
+        const errorCode = (error as NodeJS.ErrnoException).code;
+        if (error instanceof CUIError) {
+          throw error;
+        }
+        // ENOENT is expected - path doesn't exist, which is what we want
+        if (errorCode !== 'ENOENT') {
+          throw error;
+        }
+      }
+
+      // Check if parent directory exists
+      const parentDir = path.dirname(safePath);
+      try {
+        const parentStats = await fs.stat(parentDir);
+        if (!parentStats.isDirectory()) {
+          throw new CUIError('PARENT_NOT_DIRECTORY', `Parent path is not a directory: ${parentDir}`, 400);
+        }
+      } catch (error) {
+        const errorCode = (error as NodeJS.ErrnoException).code;
+        if (error instanceof CUIError) {
+          throw error;
+        }
+        if (errorCode === 'ENOENT') {
+          throw new CUIError('PARENT_NOT_FOUND', `Parent directory not found: ${parentDir}`, 404);
+        }
+        throw error;
+      }
+
+      // Create the directory (non-recursive - only creates the leaf directory)
+      await fs.mkdir(safePath, { recursive: false });
+
+      this.logger.debug('Directory created successfully', { path: safePath });
+
+      return {
+        success: true,
+        path: safePath
+      };
+    } catch (error) {
+      if (error instanceof CUIError) {
+        throw error;
+      }
+
+      const errorCode = (error as NodeJS.ErrnoException).code;
+      if (errorCode === 'EACCES') {
+        throw new CUIError('ACCESS_DENIED', `Access denied to create directory: ${requestedPath}`, 403);
+      }
+
+      this.logger.error('Error creating directory', error, { requestedPath });
+      throw new CUIError('CREATE_DIRECTORY_FAILED', `Failed to create directory: ${error}`, 500);
+    }
+  }
+
+  /**
    * Validate and normalize a path to prevent path traversal attacks
    */
   private async validatePath(requestedPath: string): Promise<string> {
@@ -228,11 +295,83 @@ export class FileSystemService {
       }
     }
     
-    this.logger.debug('Path validated successfully', { 
-      requestedPath, 
-      normalizedPath 
+    this.logger.debug('Path validated successfully', {
+      requestedPath,
+      normalizedPath
     });
-    
+
+    return normalizedPath;
+  }
+
+  /**
+   * Validate and normalize a path for directory creation
+   * Similar to validatePath but allows the target path to not exist yet
+   * and doesn't block hidden directories (since we want to allow creating
+   * directories in places like ~/.config)
+   */
+  private async validatePathForCreate(requestedPath: string): Promise<string> {
+    // Require absolute paths
+    if (!path.isAbsolute(requestedPath)) {
+      throw new CUIError('INVALID_PATH', 'Path must be absolute', 400);
+    }
+
+    // Check for path traversal attempts before normalization
+    if (requestedPath.includes('..')) {
+      this.logger.warn('Path traversal attempt detected', {
+        requestedPath
+      });
+      throw new CUIError('PATH_TRAVERSAL_DETECTED', 'Invalid path: path traversal detected', 400);
+    }
+
+    // Normalize the path to resolve . segments and clean up
+    const normalizedPath = path.normalize(requestedPath);
+
+    // Check against allowed base paths if configured
+    if (this.allowedBasePaths.length > 0) {
+      const isAllowed = this.allowedBasePaths.some(basePath =>
+        normalizedPath.startsWith(basePath)
+      );
+
+      if (!isAllowed) {
+        this.logger.warn('Path outside allowed directories', {
+          requestedPath,
+          normalizedPath,
+          allowedBasePaths: this.allowedBasePaths
+        });
+        throw new CUIError('PATH_NOT_ALLOWED', 'Path is outside allowed directories', 403);
+      }
+    }
+
+    // Additional security checks on path segments
+    const segments = normalizedPath.split(path.sep);
+
+    for (const segment of segments) {
+      if (!segment) continue;
+
+      // Check for null bytes
+      if (segment.includes('\u0000')) {
+        this.logger.warn('Null byte detected in path', {
+          requestedPath,
+          segment
+        });
+        throw new CUIError('INVALID_PATH', 'Path contains null bytes', 400);
+      }
+
+      // Check for invalid characters
+      if (/[<>:|?*]/.test(segment)) {
+        this.logger.warn('Invalid characters detected in path', {
+          requestedPath,
+          segment
+        });
+        throw new CUIError('INVALID_PATH', 'Path contains invalid characters', 400);
+      }
+    }
+
+    this.logger.debug('Path validated successfully for create', {
+      requestedPath,
+      normalizedPath
+    });
+
     return normalizedPath;
   }
 

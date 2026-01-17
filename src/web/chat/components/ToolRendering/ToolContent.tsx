@@ -177,7 +177,20 @@ export function ToolContent({
           result={resultContent}
         />
       );
-    
+
+    case 'AskUserQuestion':
+    case 'mcp__cui-permissions__ask_user_question':
+      // AskUserQuestion is handled via QuestionDialog in the Composer
+      // Just show a minimal summary here
+      if (resultContent) {
+        return (
+          <div className="text-sm text-muted-foreground">
+            Answered
+          </div>
+        );
+      }
+      return null;
+
     default:
       return (
         <FallbackTool

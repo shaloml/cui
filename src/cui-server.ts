@@ -462,7 +462,8 @@ export class CUIServer {
     this.app.use('/', createSystemRoutes(this.processManager, this.historyReader)); // For /health at root
     
     // Permission routes - before auth (needed for MCP server communication)
-    this.app.use('/api/permissions', createPermissionRoutes(this.permissionTracker));
+    // Pass questionTracker to handle AskUserQuestion redirects
+    this.app.use('/api/permissions', createPermissionRoutes(this.permissionTracker, this.questionTracker));
     // Question routes - before auth (needed for MCP server communication)
     this.app.use('/api/questions', createQuestionRoutes(this.questionTracker));
     // Notifications routes - before auth (needed for service worker subscription on first load)

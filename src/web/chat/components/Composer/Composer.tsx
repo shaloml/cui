@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { ChevronDown, Mic, Send, Loader2, Sparkles, Laptop, Square, Check, X, MicOff, Zap, Bot, Drone, Code2, Gauge, Rocket, FileText, Paperclip } from 'lucide-react';
+import { ChevronDown, Mic, Send, Loader2, Sparkles, Laptop, Square, Check, X, MicOff, Zap, Bot, Drone, Code2, Gauge, Rocket, FileText, Paperclip, FolderOpen } from 'lucide-react';
 import { DropdownSelector, DropdownOption } from '../DropdownSelector';
 import { PermissionDialog } from '../PermissionDialog';
 import { QuestionDialog } from '../QuestionDialog';
 import { WaveformVisualizer } from '../WaveformVisualizer';
 import { FileAttachmentPreview } from './FileAttachmentPreview';
+import { WorkspaceBrowserModal } from './WorkspaceBrowserModal';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -85,17 +86,22 @@ interface DirectoryDropdownProps {
   selectedDirectory: string;
   recentDirectories: Record<string, { lastDate: string; shortname: string }>;
   onDirectorySelect: (directory: string) => void;
+  onBrowseClick: () => void;
 }
 
-function DirectoryDropdown({ 
-  selectedDirectory, 
-  recentDirectories, 
-  onDirectorySelect 
+function DirectoryDropdown({
+  selectedDirectory,
+  recentDirectories,
+  onDirectorySelect,
+  onBrowseClick
 }: DirectoryDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
 
+  // Special value for "Browse..." option
+  const BROWSE_VALUE = '__browse__';
+
   // Convert recentDirectories to sorted array and create options
-  const options: DropdownOption<string>[] = Object.entries(recentDirectories)
+  const recentOptions: DropdownOption<string>[] = Object.entries(recentDirectories)
     .map(([path, data]) => ({
       value: path,
       label: data.shortname,
@@ -106,8 +112,14 @@ function DirectoryDropdown({
       return new Date(dateB).getTime() - new Date(dateA).getTime();
     });
 
+  // Add "Browse..." option at the end
+  const options: DropdownOption<string>[] = [
+    ...recentOptions,
+    { value: BROWSE_VALUE, label: 'Browse...' },
+  ];
+
   // Get shortname for display
-  const displayText = selectedDirectory === 'Select directory' 
+  const displayText = selectedDirectory === 'Select directory'
     ? selectedDirectory
     : recentDirectories[selectedDirectory]?.shortname || selectedDirectory.split('/').pop() || selectedDirectory;
 
@@ -116,14 +128,23 @@ function DirectoryDropdown({
       options={options}
       value={selectedDirectory}
       onChange={(value) => {
-        onDirectorySelect(value);
-        setIsOpen(false);
+        if (value === BROWSE_VALUE) {
+          setIsOpen(false);
+          onBrowseClick();
+        } else {
+          onDirectorySelect(value);
+          setIsOpen(false);
+        }
       }}
       isOpen={isOpen}
       onOpenChange={setIsOpen}
       placeholder="Enter a directory..."
       showFilterInput={true}
       filterPredicate={(option, searchText) => {
+        // Always show Browse option
+        if (option.value === BROWSE_VALUE) {
+          return true;
+        }
         // Allow filtering by path
         if (option.value.toLowerCase().includes(searchText.toLowerCase())) {
           return true;
@@ -131,6 +152,17 @@ function DirectoryDropdown({
         // If the search text looks like a path and doesn't match any existing option,
         // the user can press Enter to add it as a new directory
         return false;
+      }}
+      renderOption={(option) => {
+        if (option.value === BROWSE_VALUE) {
+          return (
+            <div className="flex items-center gap-2 w-full text-muted-foreground">
+              <FolderOpen size={14} />
+              <span className="text-sm">{option.label}</span>
+            </div>
+          );
+        }
+        return undefined; // Use default rendering
       }}
       renderTrigger={({ onClick }) => (
         <Button
@@ -363,6 +395,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
   const composerRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [isBrowserModalOpen, setIsBrowserModalOpen] = useState(false);
 
   // Audio recording state
   const { 
@@ -1029,6 +1062,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
                       selectedDirectory={selectedDirectory}
                       recentDirectories={recentDirectories}
                       onDirectorySelect={handleDirectorySelect}
+                      onBrowseClick={() => setIsBrowserModalOpen(true)}
                     />
                   )}
 
@@ -1291,6 +1325,20 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
           questionRequest={questionRequest}
           isVisible={true}
           onSubmit={(requestId, answers) => onQuestionAnswer?.(requestId, answers)}
+        />
+      )}
+
+      {/* Workspace Browser Modal */}
+      {showDirectorySelector && (
+        <WorkspaceBrowserModal
+          open={isBrowserModalOpen}
+          onClose={() => setIsBrowserModalOpen(false)}
+          onSelect={(path) => {
+            handleDirectorySelect(path);
+            setIsBrowserModalOpen(false);
+          }}
+          initialPath={selectedDirectory !== 'Select directory' ? selectedDirectory : undefined}
+          recentDirectories={recentDirectories}
         />
       )}
     </form>

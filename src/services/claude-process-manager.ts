@@ -757,8 +757,8 @@ export class ClaudeProcessManager extends EventEmitter {
       args.push('--mcp-config', this.mcpConfigPath);
       // Add the permission prompt tool flag
       args.push('--permission-prompt-tool', 'mcp__cui-permissions__approval_prompt');
-      // Allow the MCP permission tool
-      args.push('--allowedTools', 'mcp__cui-permissions__approval_prompt');
+      // Allow both MCP tools (approval_prompt and ask_user_question)
+      args.push('--allowedTools', 'mcp__cui-permissions__approval_prompt,mcp__cui-permissions__ask_user_question');
     }
 
     this.logger.debug('Built Claude resume args', { args, hasMCPConfig: !!this.mcpConfigPath });
@@ -819,10 +819,12 @@ export class ClaudeProcessManager extends EventEmitter {
       args.push('--mcp-config', this.mcpConfigPath);
       // Add the permission prompt tool flag
       args.push('--permission-prompt-tool', 'mcp__cui-permissions__approval_prompt');
-      // Allow the MCP permission tool
+      // Allow both MCP tools (approval_prompt and ask_user_question)
+      const mcpTools = ['mcp__cui-permissions__approval_prompt', 'mcp__cui-permissions__ask_user_question'];
       const currentAllowedTools = config.allowedTools || [];
-      if (!currentAllowedTools.includes('mcp__cui-permissions__approval_prompt')) {
-        args.push('--allowedTools', 'mcp__cui-permissions__approval_prompt');
+      const toolsToAdd = mcpTools.filter(tool => !currentAllowedTools.includes(tool));
+      if (toolsToAdd.length > 0) {
+        args.push('--allowedTools', toolsToAdd.join(','));
       }
     }
 

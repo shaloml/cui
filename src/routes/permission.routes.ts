@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { CUIError, PermissionDecisionRequest, PermissionDecisionResponse } from '@/types/index.js';
+import { CUIError, PermissionDecisionRequest, PermissionDecisionResponse, AskUserQuestionItem } from '@/types/index.js';
 import { RequestWithRequestId } from '@/types/express.js';
 import { PermissionTracker } from '@/services/permission-tracker.js';
+import { QuestionTracker } from '@/services/question-tracker.js';
 import { createLogger } from '@/services/logger.js';
 
 export function createPermissionRoutes(
-  permissionTracker: PermissionTracker
+  permissionTracker: PermissionTracker,
+  questionTracker?: QuestionTracker
 ): Router {
   const router = Router();
   const logger = createLogger('PermissionRoutes');
@@ -17,24 +19,45 @@ export function createPermissionRoutes(
       requestId,
       body: req.body
     });
-    
+
     try {
       const { toolName, toolInput, streamingId } = req.body;
-      
+
       if (!toolName) {
         throw new CUIError('MISSING_TOOL_NAME', 'toolName is required', 400);
       }
-      
+
+      // Check if this is an AskUserQuestion tool - route to question tracker instead
+      if (toolName === 'AskUserQuestion' && questionTracker && toolInput?.questions) {
+        logger.debug('Redirecting AskUserQuestion to question tracker', {
+          requestId,
+          questionCount: toolInput.questions.length,
+          streamingId
+        });
+
+        const questions: AskUserQuestionItem[] = toolInput.questions;
+        const questionRequest = questionTracker.addQuestionRequest(questions, streamingId);
+
+        logger.debug('Question request tracked', {
+          requestId,
+          questionId: questionRequest.id,
+          streamingId: questionRequest.streamingId
+        });
+
+        res.json({ success: true, id: questionRequest.id });
+        return;
+      }
+
       // Add permission request with the provided streamingId
       const request = permissionTracker.addPermissionRequest(toolName, toolInput, streamingId);
-      
+
       logger.debug('Permission request tracked', {
         requestId,
         permissionId: request.id,
         toolName,
         streamingId: request.streamingId
       });
-      
+
       res.json({ success: true, id: request.id });
     } catch (error) {
       logger.debug('Permission notification failed', {

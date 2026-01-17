@@ -13,6 +13,7 @@ import type {
   QuestionAnswerResponse,
   FileSystemListQuery,
   FileSystemListResponse,
+  CreateDirectoryResponse,
   CommandsResponse,
 } from '../types';
 import { getAuthToken } from '../../hooks/useAuth';
@@ -176,8 +177,15 @@ class ApiService {
     searchParams.append('path', params.path);
     if (params.recursive !== undefined) searchParams.append('recursive', params.recursive.toString());
     if (params.respectGitignore !== undefined) searchParams.append('respectGitignore', params.respectGitignore.toString());
-    
+
     return this.apiCall(`/api/filesystem/list?${searchParams}`);
+  }
+
+  async createDirectory(path: string): Promise<CreateDirectoryResponse> {
+    return this.apiCall('/api/filesystem/create-directory', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    });
   }
 
   async getCommands(workingDirectory?: string): Promise<CommandsResponse> {

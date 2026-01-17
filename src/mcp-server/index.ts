@@ -149,6 +149,17 @@ async function handleApprovalPrompt(request: { params: { arguments?: Record<stri
     // Log the permission request
     logger.debug('MCP Permission request received', { tool_name, input, streamingId: CUI_STREAMING_ID });
 
+    // Check if this is an AskUserQuestion - route to question handling instead
+    if (tool_name === 'AskUserQuestion' && input?.questions) {
+      logger.debug('Redirecting AskUserQuestion to question handler', { streamingId: CUI_STREAMING_ID });
+      return handleAskUserQuestionFromApproval(input.questions as Array<{
+        question: string;
+        header: string;
+        options: Array<{ label: string; description?: string }>;
+        multiSelect: boolean;
+      }>);
+    }
+
     // Send the permission request to CUI server
     const response = await fetch(`${CUI_SERVER_URL}/api/permissions/notify`, {
       method: 'POST',
@@ -285,6 +296,140 @@ async function handleApprovalPrompt(request: { params: { arguments?: Record<stri
   }
 }
 
+// Helper function to process questions (used by both handlers)
+async function processQuestions(questions: Array<{
+  question: string;
+  header: string;
+  options: Array<{ label: string; description?: string }>;
+  multiSelect: boolean;
+}>, fromApprovalPrompt: boolean = false) {
+  logger.debug('Processing question request', { questionCount: questions.length, streamingId: CUI_STREAMING_ID, fromApprovalPrompt });
+
+  // Send the question request to CUI server
+  const response = await fetch(`${CUI_SERVER_URL}/api/questions/notify`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      questions,
+      streamingId: CUI_STREAMING_ID || 'unknown',
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    logger.error('Failed to notify CUI server for question', { status: response.status, error: errorText });
+    throw new Error(`Failed to notify CUI server: ${errorText}`);
+  }
+
+  // Get the question request ID from the notification response
+  const notificationData = await response.json() as QuestionNotificationResponse;
+  const questionRequestId = notificationData.id;
+
+  logger.debug('Question request created', { questionRequestId, streamingId: CUI_STREAMING_ID });
+
+  // Poll for answer
+  const POLL_INTERVAL = 1000; // 1 second
+  const TIMEOUT = 60 * 60 * 1000; // 1 hour
+  const startTime = Date.now();
+
+  while (true) {
+    // Check timeout
+    if (Date.now() - startTime > TIMEOUT) {
+      logger.warn('Question request timed out', { questionRequestId });
+      const timeoutResponse = fromApprovalPrompt
+        ? { behavior: 'deny', message: 'Question timed out - user did not respond' }
+        : { error: 'Question timed out - user did not respond' };
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify(timeoutResponse),
+        }],
+      };
+    }
+
+    // Poll for question status
+    const pollResponse = await fetch(
+      `${CUI_SERVER_URL}/api/questions?streamingId=${CUI_STREAMING_ID}&status=pending`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!pollResponse.ok) {
+      logger.error('Failed to poll question status', { status: pollResponse.status });
+      throw new Error(`Failed to poll question status: ${pollResponse.status}`);
+    }
+
+    const { questions: pendingQuestions } = await pollResponse.json() as QuestionsResponse;
+    const pendingQuestion = pendingQuestions.find((q) => q.id === questionRequestId);
+
+    if (!pendingQuestion) {
+      // Question has been answered (no longer pending)
+      // Fetch all questions to find our specific one
+      const allQuestionsResponse = await fetch(
+        `${CUI_SERVER_URL}/api/questions?streamingId=${CUI_STREAMING_ID}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!allQuestionsResponse.ok) {
+        logger.error('Failed to fetch all questions', { status: allQuestionsResponse.status });
+        throw new Error(`Failed to fetch all questions: ${allQuestionsResponse.status}`);
+      }
+
+      const { questions: allQuestions } = await allQuestionsResponse.json() as QuestionsResponse;
+      const answeredQuestion = allQuestions.find((q) => q.id === questionRequestId);
+
+      if (answeredQuestion && answeredQuestion.status === 'answered') {
+        logger.debug('Question answered', { questionRequestId, answers: answeredQuestion.answers });
+        // If coming from approval_prompt, format response as approval with answers
+        const responseData = fromApprovalPrompt
+          ? { behavior: 'allow', message: 'User answered the questions', answers: answeredQuestion.answers }
+          : { answers: answeredQuestion.answers };
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(responseData),
+          }],
+        };
+      }
+    }
+
+    // Wait before next poll
+    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+  }
+}
+
+// Handler for AskUserQuestion coming through approval_prompt
+async function handleAskUserQuestionFromApproval(questions: Array<{
+  question: string;
+  header: string;
+  options: Array<{ label: string; description?: string }>;
+  multiSelect: boolean;
+}>) {
+  try {
+    // Pass true to indicate this came from approval_prompt, so response is formatted correctly
+    return await processQuestions(questions, true);
+  } catch (error) {
+    logger.error('Error handling AskUserQuestion from approval', error);
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({ behavior: 'deny', message: `Failed to process question: ${error instanceof Error ? error.message : 'Unknown error'}` }),
+      }],
+    };
+  }
+}
+
 // Handler for ask_user_question tool
 async function handleAskUserQuestion(request: { params: { arguments?: Record<string, unknown> } }) {
   const { questions } = request.params.arguments as {
@@ -297,109 +442,12 @@ async function handleAskUserQuestion(request: { params: { arguments?: Record<str
   };
 
   try {
-    logger.debug('MCP Question request received', { questionCount: questions.length, streamingId: CUI_STREAMING_ID });
-
-    // Send the question request to CUI server
-    const response = await fetch(`${CUI_SERVER_URL}/api/questions/notify`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        questions,
-        streamingId: CUI_STREAMING_ID || 'unknown',
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('Failed to notify CUI server for question', { status: response.status, error: errorText });
-      throw new Error(`Failed to notify CUI server: ${errorText}`);
-    }
-
-    // Get the question request ID from the notification response
-    const notificationData = await response.json() as QuestionNotificationResponse;
-    const questionRequestId = notificationData.id;
-
-    logger.debug('Question request created', { questionRequestId, streamingId: CUI_STREAMING_ID });
-
-    // Poll for answer
-    const POLL_INTERVAL = 1000; // 1 second
-    const TIMEOUT = 60 * 60 * 1000; // 1 hour
-    const startTime = Date.now();
-
-    while (true) {
-      // Check timeout
-      if (Date.now() - startTime > TIMEOUT) {
-        logger.warn('Question request timed out', { questionRequestId });
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({ error: 'Question timed out - user did not respond' }),
-          }],
-        };
-      }
-
-      // Poll for question status
-      const pollResponse = await fetch(
-        `${CUI_SERVER_URL}/api/questions?streamingId=${CUI_STREAMING_ID}&status=pending`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!pollResponse.ok) {
-        logger.error('Failed to poll question status', { status: pollResponse.status });
-        throw new Error(`Failed to poll question status: ${pollResponse.status}`);
-      }
-
-      const { questions: pendingQuestions } = await pollResponse.json() as QuestionsResponse;
-      const pendingQuestion = pendingQuestions.find((q) => q.id === questionRequestId);
-
-      if (!pendingQuestion) {
-        // Question has been answered (no longer pending)
-        // Fetch all questions to find our specific one
-        const allQuestionsResponse = await fetch(
-          `${CUI_SERVER_URL}/api/questions?streamingId=${CUI_STREAMING_ID}`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        if (!allQuestionsResponse.ok) {
-          logger.error('Failed to fetch all questions', { status: allQuestionsResponse.status });
-          throw new Error(`Failed to fetch all questions: ${allQuestionsResponse.status}`);
-        }
-
-        const { questions: allQuestions } = await allQuestionsResponse.json() as QuestionsResponse;
-        const answeredQuestion = allQuestions.find((q) => q.id === questionRequestId);
-
-        if (answeredQuestion && answeredQuestion.status === 'answered') {
-          logger.debug('Question answered', { questionRequestId, answers: answeredQuestion.answers });
-          return {
-            content: [{
-              type: 'text',
-              text: JSON.stringify({ answers: answeredQuestion.answers }),
-            }],
-          };
-        }
-      }
-
-      // Wait before next poll
-      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
-    }
+    return await processQuestions(questions);
   } catch (error) {
     logger.error('Error processing question request', { error });
-
     return {
       content: [{
-        type: 'text',
+        type: 'text' as const,
         text: JSON.stringify({ error: `Question failed: ${error instanceof Error ? error.message : 'Unknown error'}` }),
       }],
     };
