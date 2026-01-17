@@ -77,7 +77,7 @@ export interface CUIConfig {
  */
 export const DEFAULT_CONFIG: Omit<CUIConfig, 'machine_id' | 'authToken'> = {
   server: {
-    host: 'localhost',
+    host: '0.0.0.0',
     port: 3001
   },
   interface: {

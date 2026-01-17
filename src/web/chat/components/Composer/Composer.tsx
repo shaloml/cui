@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } f
 import { ChevronDown, Mic, Send, Loader2, Sparkles, Laptop, Square, Check, X, MicOff, Zap, Bot, Drone, Code2, Gauge, Rocket, FileText } from 'lucide-react';
 import { DropdownSelector, DropdownOption } from '../DropdownSelector';
 import { PermissionDialog } from '../PermissionDialog';
+import { QuestionDialog } from '../QuestionDialog';
 import { WaveformVisualizer } from '../WaveformVisualizer';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import type { PermissionRequest, Command } from '../../types';
+import type { PermissionRequest, AskUserQuestionRequest, Command } from '../../types';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
 import { api } from '../../../chat/services/api';
@@ -57,6 +58,10 @@ export interface ComposerProps {
   // Permission handling
   permissionRequest?: PermissionRequest | null;
   onPermissionDecision?: (requestId: string, action: 'approve' | 'deny', denyReason?: string) => void;
+
+  // Question handling
+  questionRequest?: AskUserQuestionRequest | null;
+  onQuestionAnswer?: (requestId: string, answers: Record<string, string>) => void;
 
   // Stop functionality
   onStop?: () => void;
@@ -314,6 +319,8 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
   availableModels = ['default', 'opus', 'sonnet'],
   permissionRequest,
   onPermissionDecision,
+  questionRequest,
+  onQuestionAnswer,
   onStop,
   fileSystemEntries = [],
   onFetchFileSystem,
@@ -1114,9 +1121,18 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
       
       {/* Permission Dialog */}
       {permissionRequest && showPermissionUI && (
-        <PermissionDialog 
+        <PermissionDialog
           permissionRequest={permissionRequest}
           isVisible={true}
+        />
+      )}
+
+      {/* Question Dialog */}
+      {questionRequest && showPermissionUI && (
+        <QuestionDialog
+          questionRequest={questionRequest}
+          isVisible={true}
+          onSubmit={(requestId, answers) => onQuestionAnswer?.(requestId, answers)}
         />
       )}
     </form>

@@ -16,6 +16,7 @@ export function ConversationView() {
   const [error, setError] = useState<string | null>(null);
   const [conversationTitle, setConversationTitle] = useState<string>('Conversation');
   const [isPermissionDecisionLoading, setIsPermissionDecisionLoading] = useState(false);
+  const [isQuestionAnswerLoading, setIsQuestionAnswerLoading] = useState(false);
   const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
   const [currentWorkingDirectory, setCurrentWorkingDirectory] = useState<string>('');
   const composerRef = useRef<ComposerRef>(null);
@@ -25,6 +26,7 @@ export function ConversationView() {
     messages,
     toolResults,
     currentPermissionRequest,
+    currentQuestionRequest,
     childrenMessages,
     expandedTasks,
     clearMessages,
@@ -34,6 +36,8 @@ export function ConversationView() {
     toggleTaskExpanded,
     clearPermissionRequest,
     setPermissionRequest,
+    clearQuestionRequest,
+    setQuestionRequest,
   } = useConversationMessages({
     onResult: (newSessionId) => {
       // Navigate to the new session page if session changed
@@ -113,22 +117,42 @@ export function ConversationView() {
             setStreamingId(currentConversation.streamingId);
             
             try {
-              const { permissions } = await api.getPermissions({ 
-                streamingId: currentConversation.streamingId, 
-                status: 'pending' 
+              const { permissions } = await api.getPermissions({
+                streamingId: currentConversation.streamingId,
+                status: 'pending'
               });
-              
+
               if (permissions.length > 0) {
                 // Take the most recent pending permission (by timestamp)
-                const mostRecentPermission = permissions.reduce((latest, current) => 
+                const mostRecentPermission = permissions.reduce((latest, current) =>
                   new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
                 );
-                
+
                 setPermissionRequest(mostRecentPermission);
               }
             } catch (permissionError) {
               // Don't break conversation loading if permission fetching fails
               console.warn('[ConversationView] Failed to fetch existing permissions:', permissionError);
+            }
+
+            // Check for existing pending questions
+            try {
+              const { questions } = await api.getQuestions({
+                streamingId: currentConversation.streamingId,
+                status: 'pending'
+              });
+
+              if (questions.length > 0) {
+                // Take the most recent pending question (by timestamp)
+                const mostRecentQuestion = questions.reduce((latest, current) =>
+                  new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
+                );
+
+                setQuestionRequest(mostRecentQuestion);
+              }
+            } catch (questionError) {
+              // Don't break conversation loading if question fetching fails
+              console.warn('[ConversationView] Failed to fetch existing questions:', questionError);
             }
           }
         }
@@ -212,6 +236,21 @@ export function ConversationView() {
     }
   };
 
+  const handleQuestionAnswer = async (requestId: string, answers: Record<string, string>) => {
+    if (isQuestionAnswerLoading) return;
+
+    setIsQuestionAnswerLoading(true);
+    try {
+      await api.sendQuestionAnswer(requestId, { answers });
+      // Clear the question request after successful answer
+      clearQuestionRequest();
+    } catch (err: any) {
+      console.error('Failed to send question answer:', err);
+      setError(err.message || 'Failed to send question answer');
+    } finally {
+      setIsQuestionAnswerLoading(false);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col bg-background relative" role="main" aria-label="Conversation view">
@@ -302,9 +341,11 @@ export function ConversationView() {
             onSubmit={handleSendMessage}
             onStop={handleStop}
             onPermissionDecision={handlePermissionDecision}
-            isLoading={isConnected || isPermissionDecisionLoading}
+            onQuestionAnswer={handleQuestionAnswer}
+            isLoading={isConnected || isPermissionDecisionLoading || isQuestionAnswerLoading}
             placeholder="Continue the conversation..."
             permissionRequest={currentPermissionRequest}
+            questionRequest={currentQuestionRequest}
             showPermissionUI={true}
             showStopButton={true}
             enableFileAutocomplete={true}

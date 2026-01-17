@@ -117,3 +117,16 @@ tests/
 - `better-sqlite3` - Session storage
 - `pino` - Logging
 - React, Vite, Tailwind - Frontend
+
+## Remote/VM Development
+
+This project runs on a VM. When starting dev servers:
+
+1. **Always bind to 0.0.0.0**: Use `--host 0.0.0.0` flag
+2. **Display actual IP**: Run `hostname -I | awk '{print $1}'` to get the server IP
+3. **Example commands**:
+   - `npm run dev:web` (already configured for 0.0.0.0)
+   - `vite --host 0.0.0.0`
+   - `python -m http.server 8000 --bind 0.0.0.0`
+
+When showing URLs to the user, replace `localhost` with the actual IP address.

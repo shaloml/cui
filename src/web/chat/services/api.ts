@@ -8,6 +8,9 @@ import type {
   PermissionRequest,
   PermissionDecisionRequest,
   PermissionDecisionResponse,
+  AskUserQuestionRequest,
+  QuestionAnswerRequest,
+  QuestionAnswerResponse,
   FileSystemListQuery,
   FileSystemListResponse,
   CommandsResponse,
@@ -128,6 +131,27 @@ class ApiService {
     return this.apiCall(`/api/permissions/${requestId}/decision`, {
       method: 'POST',
       body: JSON.stringify(decision),
+    });
+  }
+
+  async getQuestions(params?: {
+    streamingId?: string;
+    status?: 'pending' | 'answered'
+  }): Promise<{ questions: AskUserQuestionRequest[] }> {
+    const searchParams = new URLSearchParams();
+    if (params?.streamingId) searchParams.append('streamingId', params.streamingId);
+    if (params?.status) searchParams.append('status', params.status);
+
+    return this.apiCall(`/api/questions?${searchParams}`);
+  }
+
+  async sendQuestionAnswer(
+    requestId: string,
+    answer: QuestionAnswerRequest
+  ): Promise<QuestionAnswerResponse> {
+    return this.apiCall(`/api/questions/${requestId}/answer`, {
+      method: 'POST',
+      body: JSON.stringify(answer),
     });
   }
 

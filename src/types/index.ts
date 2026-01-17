@@ -99,6 +99,28 @@ export interface PermissionRequest {
   denyReason?: string;
 }
 
+// AskUserQuestion types
+export interface AskUserQuestionOption {
+  label: string;
+  description?: string;
+}
+
+export interface AskUserQuestionItem {
+  question: string;
+  header: string;
+  options: AskUserQuestionOption[];
+  multiSelect: boolean;
+}
+
+export interface AskUserQuestionRequest {
+  id: string;
+  streamingId: string;
+  questions: AskUserQuestionItem[];
+  timestamp: string;
+  status: 'pending' | 'answered';
+  answers?: Record<string, string>; // Map of question header to answer(s)
+}
+
 // Configuration types
 export interface ConversationConfig {
   workingDirectory: string;
@@ -172,6 +194,16 @@ export interface PermissionDecisionResponse {
   message?: string;
 }
 
+// Question answer types
+export interface QuestionAnswerRequest {
+  answers: Record<string, string>; // Map of question header to answer(s)
+}
+
+export interface QuestionAnswerResponse {
+  success: boolean;
+  message?: string;
+}
+
 export interface SystemStatusResponse {
   claudeVersion: string;
   claudePath: string;
@@ -181,9 +213,10 @@ export interface SystemStatusResponse {
 }
 
 // Stream event types
-export type StreamEvent = 
+export type StreamEvent =
   | { type: 'connected'; streaming_id: string; timestamp: string }
   | { type: 'permission_request'; data: PermissionRequest; streamingId: string; timestamp: string }
+  | { type: 'ask_user_question'; data: AskUserQuestionRequest; streamingId: string; timestamp: string }
   | { type: 'error'; error: string; streamingId: string; timestamp: string }
   | { type: 'closed'; streamingId: string; timestamp: string }
   | SystemInitMessage

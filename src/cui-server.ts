@@ -11,6 +11,7 @@ import { ClaudeProcessManager } from './services/claude-process-manager.js';
 import { StreamManager } from './services/stream-manager.js';
 import { ClaudeHistoryReader } from './services/claude-history-reader.js';
 import { PermissionTracker } from './services/permission-tracker.js';
+import { QuestionTracker } from './services/question-tracker.js';
 import { MCPConfigGenerator } from './services/mcp-config-generator.js';
 import { FileSystemService } from './services/file-system-service.js';
 import { ConfigService } from './services/config-service.js';
@@ -22,15 +23,17 @@ import { NotificationService } from './services/notification-service.js';
 import { WebPushService } from './services/web-push-service.js';
 import { geminiService } from './services/gemini-service.js';
 import { ClaudeRouterService } from './services/claude-router-service.js';
-import { 
+import {
   StreamEvent,
   CUIError,
-  PermissionRequest
+  PermissionRequest,
+  AskUserQuestionRequest
 } from './types/index.js';
 import { createLogger, type Logger } from './services/logger.js';
 import { createConversationRoutes } from './routes/conversation.routes.js';
 import { createSystemRoutes } from './routes/system.routes.js';
 import { createPermissionRoutes } from './routes/permission.routes.js';
+import { createQuestionRoutes } from './routes/question.routes.js';
 import { createFileSystemRoutes } from './routes/filesystem.routes.js';
 import { createLogRoutes } from './routes/log.routes.js';
 import { createStreamingRoutes } from './routes/streaming.routes.js';
@@ -58,6 +61,7 @@ export class CUIServer {
   private historyReader: ClaudeHistoryReader;
   private statusTracker: ConversationStatusManager;
   private permissionTracker: PermissionTracker;
+  private questionTracker: QuestionTracker;
   private mcpConfigGenerator: MCPConfigGenerator;
   private fileSystemService: FileSystemService;
   private configService: ConfigService;
@@ -106,6 +110,7 @@ export class CUIServer {
     this.processManager = new ClaudeProcessManager(this.historyReader, this.statusTracker, undefined, undefined, this.toolMetricsService, this.sessionInfoService, this.fileSystemService);
     this.streamManager = new StreamManager();
     this.permissionTracker = new PermissionTracker();
+    this.questionTracker = new QuestionTracker();
     this.mcpConfigGenerator = new MCPConfigGenerator(this.fileSystemService);
     this.workingDirectoriesService = new WorkingDirectoriesService(this.historyReader, this.logger);
     this.notificationService = new NotificationService();
@@ -123,6 +128,7 @@ export class CUIServer {
     // Routes will be set up in start() to allow tests to override services
     this.setupProcessManagerIntegration();
     this.setupPermissionTrackerIntegration();
+    this.setupQuestionTrackerIntegration();
     this.processManager.setConversationStatusManager(this.conversationStatusManager);
   }
 
@@ -457,6 +463,8 @@ export class CUIServer {
     
     // Permission routes - before auth (needed for MCP server communication)
     this.app.use('/api/permissions', createPermissionRoutes(this.permissionTracker));
+    // Question routes - before auth (needed for MCP server communication)
+    this.app.use('/api/questions', createQuestionRoutes(this.questionTracker));
     // Notifications routes - before auth (needed for service worker subscription on first load)
     this.app.use('/api/notifications', createNotificationsRoutes(this.webPushService));
     
@@ -555,11 +563,20 @@ export class CUIServer {
       // Clean up conversation context (handled automatically in unregisterActiveSession)
       
       // Clean up permissions for this streaming session
-      const removedCount = this.permissionTracker.removePermissionsByStreamingId(streamingId);
-      if (removedCount > 0) {
+      const removedPermissions = this.permissionTracker.removePermissionsByStreamingId(streamingId);
+      if (removedPermissions > 0) {
         this.logger.debug('Cleaned up permissions for closed session', {
           streamingId,
-          removedPermissions: removedCount
+          removedPermissions
+        });
+      }
+
+      // Clean up questions for this streaming session
+      const removedQuestions = this.questionTracker.removeQuestionsByStreamingId(streamingId);
+      if (removedQuestions > 0) {
+        this.logger.debug('Cleaned up questions for closed session', {
+          streamingId,
+          removedQuestions
         });
       }
 
@@ -636,6 +653,33 @@ export class CUIServer {
     });
     
     this.logger.debug('PermissionTracker integration setup complete');
+  }
+
+  private setupQuestionTrackerIntegration(): void {
+    this.logger.debug('Setting up QuestionTracker integration');
+
+    // Forward question events to stream
+    this.questionTracker.on('question_request', (request: AskUserQuestionRequest) => {
+      this.logger.debug('Question request event received', {
+        id: request.id,
+        questionCount: request.questions.length,
+        streamingId: request.streamingId
+      });
+
+      // Broadcast to the appropriate streaming session
+      if (request.streamingId && request.streamingId !== 'unknown') {
+        const event: StreamEvent = {
+          type: 'ask_user_question',
+          data: request,
+          streamingId: request.streamingId,
+          timestamp: new Date().toISOString()
+        };
+
+        this.streamManager.broadcast(request.streamingId, event);
+      }
+    });
+
+    this.logger.debug('QuestionTracker integration setup complete');
   }
 
   private async initializeOrReloadRouter(config: import('./types/config.js').CUIConfig): Promise<void> {
