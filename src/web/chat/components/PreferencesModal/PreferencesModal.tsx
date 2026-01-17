@@ -239,6 +239,24 @@ export function PreferencesModal({ onClose }: Props) {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="flex items-center justify-between min-h-[60px] py-2">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="vscode-web-url" className="text-sm text-neutral-900 dark:text-neutral-100 font-normal">
+                      VS Code Web URL
+                    </Label>
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                      Base URL for opening projects in VS Code Web
+                    </span>
+                  </div>
+                  <Input
+                    id="vscode-web-url"
+                    value={prefs.vscodeWebUrl || ''}
+                    onChange={(e) => update({ vscodeWebUrl: e.target.value || undefined })}
+                    placeholder="http://localhost:9999"
+                    className="w-[280px] h-9 bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700"
+                    aria-label="VS Code Web URL"
+                  />
+                </div>
                 </div>
               </TabsContent>
 

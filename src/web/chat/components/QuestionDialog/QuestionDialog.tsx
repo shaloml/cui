@@ -227,6 +227,18 @@ export function QuestionDialog({ questionRequest, isVisible, onSubmit }: Questio
     onSubmit(questionRequest.id, formattedAnswers);
   }, [answers, questionRequest.id, onSubmit]);
 
+  const handleBypass = useCallback(() => {
+    // Auto-select first option for each question
+    const autoAnswers: Record<string, string> = {};
+    for (const question of questionRequest.questions) {
+      const firstOption = question.options[0];
+      if (firstOption) {
+        autoAnswers[question.header] = firstOption.label;
+      }
+    }
+    onSubmit(questionRequest.id, autoAnswers);
+  }, [questionRequest, onSubmit]);
+
   // Check if all questions have answers
   const allQuestionsAnswered = questionRequest.questions.every(q => {
     const answer = answers[q.header];
@@ -268,7 +280,14 @@ export function QuestionDialog({ questionRequest, isVisible, onSubmit }: Questio
             />
           ))}
         </div>
-        <div className="px-4 pb-4 flex justify-end">
+        <div className="px-4 pb-4 flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleBypass}
+          >
+            Bypass
+          </Button>
           <Button
             type="button"
             onClick={handleSubmit}

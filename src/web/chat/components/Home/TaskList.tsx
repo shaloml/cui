@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { TaskItem } from './TaskItem';
 import type { ConversationSummary } from '../../types';
 import { useConversations } from '../../contexts/ConversationsContext';
+import { usePreferencesContext } from '../../contexts/PreferencesContext';
 import { api } from '../../services/api';
 
 interface TaskListProps {
@@ -32,6 +33,7 @@ export function TaskList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef<HTMLDivElement>(null);
   const { recentDirectories, loadConversations } = useConversations();
+  const { preferences } = usePreferencesContext();
   const [renamingSessionId, setRenamingSessionId] = React.useState<string | null>(null);
 
   // Get filter parameters based on active tab
@@ -206,9 +208,10 @@ export function TaskList({
             liveStatus={conversation.liveStatus}
             isArchived={activeTab === 'archive'}
             isPinned={conversation.sessionInfo.pinned}
+            vscodeWebUrl={preferences?.vscodeWebUrl}
             onClick={() => handleTaskClick(conversation.sessionId)}
             onCancel={
-              conversation.status === 'ongoing' 
+              conversation.status === 'ongoing'
                 ? () => handleCancelTask(conversation.sessionId)
                 : undefined
             }

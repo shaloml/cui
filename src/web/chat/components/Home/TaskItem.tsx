@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StopCircle, Archive, Check, X } from 'lucide-react';
+import { StopCircle, Archive, Check, X, Code } from 'lucide-react';
 import { Button } from '@/web/chat/components/ui/button';
 import { Input } from '@/web/chat/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/web/chat/components/ui/tooltip';
@@ -24,6 +24,7 @@ interface TaskItemProps {
   liveStatus?: StreamStatus;
   isArchived?: boolean;
   isPinned?: boolean;
+  vscodeWebUrl?: string;
   onClick: () => void;
   onCancel?: () => void;
   onArchive?: () => void;
@@ -32,11 +33,11 @@ interface TaskItemProps {
   onPinToggle?: (isPinned: boolean) => void;
 }
 
-export function TaskItem({ 
-  id: _id, 
-  title, 
-  timestamp, 
-  projectPath, 
+export function TaskItem({
+  id: _id,
+  title,
+  timestamp,
+  projectPath,
   recentDirectories,
   status,
   messageCount,
@@ -44,6 +45,7 @@ export function TaskItem({
   liveStatus,
   isArchived = false,
   isPinned = false,
+  vscodeWebUrl,
   isRenaming = false,
   onClick,
   onCancel,
@@ -85,6 +87,15 @@ export function TaskItem({
   const handleRenameCancel = () => {
     onCancelRename?.();
     setNewName(title);
+  };
+
+  const handleOpenInVSCode = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (vscodeWebUrl && projectPath) {
+      const url = `${vscodeWebUrl}/?folder=${encodeURIComponent(projectPath)}`;
+      window.open(url, '_blank');
+    }
   };
 
   return (
@@ -215,6 +226,27 @@ export function TaskItem({
           
           {status === 'completed' && isHovered && (
             <div className="flex items-center gap-2">
+              {vscodeWebUrl && projectPath && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-6 h-6 rounded-full hover:bg-muted/50"
+                        onClick={handleOpenInVSCode}
+                        aria-label="Open in VS Code Web"
+                        type="button"
+                      >
+                        <Code size={21} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Open in VS Code Web</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>

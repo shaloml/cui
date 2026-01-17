@@ -26,6 +26,11 @@ export interface InterfaceConfig {
   colorScheme: 'light' | 'dark' | 'system';
   language: string;
   direction?: 'ltr' | 'rtl' | 'auto';
+  /**
+   * VS Code Web URL base (e.g., http://10.10.10.103:9999)
+   * Will be used as: {vscodeWebUrl}/?folder={projectPath}
+   */
+  vscodeWebUrl?: string;
   notifications?: {
     enabled: boolean;
     ntfyUrl?: string;
