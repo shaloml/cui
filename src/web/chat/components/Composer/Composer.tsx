@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { ChevronDown, Mic, Send, Loader2, Sparkles, Laptop, Square, Check, X, MicOff, Zap, Bot, Drone, Code2, Gauge, Rocket, FileText } from 'lucide-react';
+import { ChevronDown, Mic, Send, Loader2, Sparkles, Laptop, Square, Check, X, MicOff, Zap, Bot, Drone, Code2, Gauge, Rocket, FileText, Paperclip } from 'lucide-react';
 import { DropdownSelector, DropdownOption } from '../DropdownSelector';
 import { PermissionDialog } from '../PermissionDialog';
 import { QuestionDialog } from '../QuestionDialog';
 import { WaveformVisualizer } from '../WaveformVisualizer';
+import { FileAttachmentPreview } from './FileAttachmentPreview';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import type { PermissionRequest, AskUserQuestionRequest, Command } from '../../types';
+import type { PermissionRequest, AskUserQuestionRequest, Command, PendingFile, FileAttachment } from '../../types';
+import { ALLOWED_FILE_TYPES, MAX_FILE_SIZE, MAX_ATTACHMENTS } from '@/types';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
 import { api } from '../../../chat/services/api';
@@ -32,7 +34,7 @@ export interface ComposerProps {
   // Core functionality
   value?: string;
   onChange?: (value: string) => void;
-  onSubmit: (message: string, workingDirectory?: string, model?: string, permissionMode?: string) => void;
+  onSubmit: (message: string, workingDirectory?: string, model?: string, permissionMode?: string, attachments?: FileAttachment[]) => void;
   placeholder?: string;
   isLoading?: boolean;
   disabled?: boolean;
@@ -359,7 +361,9 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
   });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLFormElement>(null);
-  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+
   // Audio recording state
   const { 
     state: audioState, 
@@ -585,6 +589,106 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
     }
   };
 
+  // File handling functions
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const newPendingFiles: PendingFile[] = [];
+
+    for (const file of Array.from(files)) {
+      // Check if we've reached the maximum number of attachments
+      if (pendingFiles.length + newPendingFiles.length >= MAX_ATTACHMENTS) {
+        console.warn(`Maximum ${MAX_ATTACHMENTS} attachments allowed`);
+        break;
+      }
+
+      // Validate file type
+      const fileType = ALLOWED_FILE_TYPES[file.type as keyof typeof ALLOWED_FILE_TYPES];
+      if (!fileType) {
+        console.warn(`File type ${file.type} is not supported`);
+        continue;
+      }
+
+      // Validate file size
+      if (file.size > MAX_FILE_SIZE) {
+        console.warn(`File ${file.name} exceeds maximum size of 10MB`);
+        continue;
+      }
+
+      // Create preview for images
+      let preview: string | undefined;
+      if (fileType === 'image') {
+        preview = await createImagePreview(file);
+      }
+
+      newPendingFiles.push({
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        file,
+        name: file.name,
+        type: fileType,
+        mimeType: file.type,
+        size: file.size,
+        preview,
+      });
+    }
+
+    setPendingFiles([...pendingFiles, ...newPendingFiles]);
+
+    // Reset input so the same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const createImagePreview = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        resolve(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeFile = (fileId: string) => {
+    setPendingFiles(pendingFiles.filter(f => f.id !== fileId));
+  };
+
+  const convertToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // Extract base64 data (remove the data URL prefix)
+        const result = reader.result as string;
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const convertPendingFilesToAttachments = async (): Promise<FileAttachment[]> => {
+    const attachments: FileAttachment[] = [];
+    for (const pendingFile of pendingFiles) {
+      const data = await convertToBase64(pendingFile.file);
+      attachments.push({
+        id: pendingFile.id,
+        name: pendingFile.name,
+        type: pendingFile.type,
+        mimeType: pendingFile.mimeType,
+        size: pendingFile.size,
+        data,
+      });
+    }
+    return attachments;
+  };
+
+  const handleAttachmentClick = () => {
+    fileInputRef.current?.click();
+  };
+
   const handleAutocompleteSelection = (selection: string) => {
     if (!textareaRef.current) return;
     
@@ -675,21 +779,29 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
     resetAutocomplete();
   };
 
-  const handleSubmit = (permissionMode: string) => {
+  const handleSubmit = async (permissionMode: string) => {
     const trimmedValue = value.trim();
     if (!trimmedValue || isLoading) return;
 
     // For Home usage with directory/model
     if (showDirectorySelector && selectedDirectory === 'Select directory') return;
 
+    // Convert pending files to attachments
+    let attachments: FileAttachment[] | undefined;
+    if (pendingFiles.length > 0) {
+      attachments = await convertPendingFilesToAttachments();
+    }
+
     onSubmit(
       trimmedValue,
       showDirectorySelector ? selectedDirectory : undefined,
       showModelSelector ? selectedModel : undefined,
-      permissionMode
+      permissionMode,
+      attachments
     );
-    
+
     setValue('');
+    setPendingFiles([]);
     resetAutocomplete();
   };
 
@@ -893,8 +1005,19 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
                 disabled
               />
             )}
-            
+
           </div>
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={Object.keys(ALLOWED_FILE_TYPES).join(',')}
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+            aria-label="Upload file"
+          />
 
           {(showDirectorySelector || showModelSelector) && audioState === 'idle' && (
             <div className="absolute bottom-2 start-6 end-10 flex items-center justify-center overflow-visible">
@@ -971,8 +1094,9 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
                 </TooltipProvider>
               </div>
             ) : (
-              /* Idle State: Show mic button */
-              isAudioSupported && (
+              /* Idle State: Show attachment and mic buttons */
+              <>
+                {/* Attachment button */}
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -980,22 +1104,47 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className={cn(
-                          "h-8 px-2 text-muted-foreground hover:bg-muted/50 rounded-full",
-                          audioError && "bg-red-300 text-red-900 hover:bg-red-400 hover:text-red-950"
-                        )}
-                        onClick={handleMicClick}
-                        disabled={disabled}
+                        className="h-8 px-2 text-muted-foreground hover:bg-muted/50 rounded-full"
+                        onClick={handleAttachmentClick}
+                        disabled={disabled || pendingFiles.length >= MAX_ATTACHMENTS}
                       >
-                        {audioError ? <MicOff size={16} /> : <Mic size={16} />}
+                        <Paperclip size={16} />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>{audioError ? `Error: ${audioError}` : 'Start voice recording'}</p>
+                      <p>{pendingFiles.length >= MAX_ATTACHMENTS
+                        ? `Maximum ${MAX_ATTACHMENTS} files reached`
+                        : 'Attach files'}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-              )
+
+                {/* Mic button */}
+                {isAudioSupported && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className={cn(
+                            "h-8 px-2 text-muted-foreground hover:bg-muted/50 rounded-full",
+                            audioError && "bg-red-300 text-red-900 hover:bg-red-400 hover:text-red-950"
+                          )}
+                          onClick={handleMicClick}
+                          disabled={disabled}
+                        >
+                          {audioError ? <MicOff size={16} /> : <Mic size={16} />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{audioError ? `Error: ${audioError}` : 'Start voice recording'}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </>
             )}
             
             {permissionRequest && showPermissionUI ? (
@@ -1104,8 +1253,17 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
             )}
           </div>
         </div>
+
+        {/* File Attachment Preview */}
+        {pendingFiles.length > 0 && (
+          <FileAttachmentPreview
+            files={pendingFiles}
+            onRemove={removeFile}
+            disabled={isLoading || disabled}
+          />
+        )}
       </div>
-      
+
       {/* Autocomplete Dropdown */}
       {(enableFileAutocomplete || onFetchCommands) && (
         <AutocompleteDropdown

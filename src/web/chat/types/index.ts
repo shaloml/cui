@@ -23,6 +23,7 @@ import type {
   FileSystemListResponse,
   CommandsResponse,
   GeminiHealthResponse,
+  FileAttachment,
 } from '@/types';
 
 // Import ContentBlock from Anthropic SDK
@@ -52,7 +53,19 @@ export type {
   FileSystemListResponse,
   CommandsResponse,
   GeminiHealthResponse,
+  FileAttachment,
 };
+
+// Pending file type for files waiting to be uploaded (frontend only)
+export interface PendingFile {
+  id: string;
+  file: File;
+  name: string;
+  type: 'image' | 'document';
+  mimeType: string;
+  size: number;
+  preview?: string;  // Data URL for image preview
+}
 
 // Chat-specific types
 export interface Command {

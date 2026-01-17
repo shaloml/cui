@@ -1,8 +1,8 @@
 import { ChildProcess, spawn } from 'child_process';
-import { ConversationConfig, CUIError, SystemInitMessage, StreamEvent } from '@/types/index.js';
+import { ConversationConfig, CUIError, SystemInitMessage, StreamEvent, FileAttachment } from '@/types/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { JsonLinesParser } from './json-lines-parser.js';
@@ -28,6 +28,7 @@ export class ClaudeProcessManager extends EventEmitter {
   private outputBuffers: Map<string, string> = new Map();
   private timeouts: Map<string, NodeJS.Timeout[]> = new Map();
   private conversationConfigs: Map<string, ConversationConfig> = new Map();
+  private tempFilePaths: Map<string, string[]> = new Map(); // Track temp files per session for cleanup
   private claudeExecutablePath: string;
   private logger: Logger;
   private envOverrides: Record<string, string | undefined>;
@@ -122,15 +123,91 @@ export class ClaudeProcessManager extends EventEmitter {
     this.logger.debug('Notification service set');
   }
 
+  /**
+   * Save attachments to temporary files in the working directory
+   * Returns the paths of saved files
+   */
+  private saveAttachmentsToTempDir(
+    attachments: FileAttachment[],
+    workingDirectory: string,
+    streamingId: string
+  ): string[] {
+    const savedPaths: string[] = [];
 
+    // Create temp directory in working directory
+    const tempDir = path.join(workingDirectory, '.cui-temp');
+    if (!existsSync(tempDir)) {
+      mkdirSync(tempDir, { recursive: true });
+    }
+
+    for (const attachment of attachments) {
+      // Create a unique filename with the original extension
+      const extension = attachment.name.includes('.')
+        ? attachment.name.substring(attachment.name.lastIndexOf('.'))
+        : '';
+      const tempFileName = `.cui-temp-${streamingId.substring(0, 8)}-${attachment.id}${extension}`;
+      const tempPath = path.join(tempDir, tempFileName);
+
+      try {
+        // Decode base64 and write to file
+        const buffer = Buffer.from(attachment.data, 'base64');
+        writeFileSync(tempPath, buffer);
+        savedPaths.push(tempPath);
+
+        this.logger.debug('Saved attachment to temp file', {
+          streamingId,
+          attachmentId: attachment.id,
+          attachmentName: attachment.name,
+          tempPath,
+          size: buffer.length
+        });
+      } catch (error) {
+        this.logger.error('Failed to save attachment to temp file', error, {
+          streamingId,
+          attachmentId: attachment.id,
+          attachmentName: attachment.name
+        });
+      }
+    }
+
+    // Track temp files for cleanup
+    this.tempFilePaths.set(streamingId, savedPaths);
+
+    return savedPaths;
+  }
+
+  /**
+   * Clean up temporary files for a session
+   */
+  private cleanupTempFiles(streamingId: string): void {
+    const paths = this.tempFilePaths.get(streamingId);
+    if (!paths || paths.length === 0) return;
+
+    for (const filePath of paths) {
+      try {
+        if (existsSync(filePath)) {
+          unlinkSync(filePath);
+          this.logger.debug('Cleaned up temp file', { streamingId, filePath });
+        }
+      } catch (error) {
+        this.logger.warn('Failed to clean up temp file', {
+          streamingId,
+          filePath,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+
+    this.tempFilePaths.delete(streamingId);
+  }
 
   /**
    * Start a new Claude conversation (or resume if resumedSessionId is provided)
    */
   async startConversation(config: ConversationConfig & { resumedSessionId?: string }): Promise<{streamingId: string; systemInit: SystemInitMessage}> {
     const isResume = !!config.resumedSessionId;
-    
-    this.logger.debug('Start conversation requested', { 
+
+    this.logger.debug('Start conversation requested', {
       hasInitialPrompt: !!config.initialPrompt,
       promptLength: config.initialPrompt?.length,
       workingDirectory: config.workingDirectory,
@@ -141,14 +218,15 @@ export class ClaudeProcessManager extends EventEmitter {
       claudePath: config.claudeExecutablePath || this.claudeExecutablePath,
       isResume,
       resumedSessionId: config.resumedSessionId,
-      previousMessageCount: config.previousMessages?.length || 0
+      previousMessageCount: config.previousMessages?.length || 0,
+      attachmentCount: config.attachments?.length || 0
     });
-    
+
     // If resuming and no working directory provided, fetch from original session
     let workingDirectory = config.workingDirectory;
     if (isResume && !workingDirectory && config.resumedSessionId) {
       const fetchedWorkingDirectory = await this.historyReader.getConversationWorkingDirectory(config.resumedSessionId);
-      
+
       if (!fetchedWorkingDirectory) {
         throw new CUIError(
           'CONVERSATION_NOT_FOUND',
@@ -156,25 +234,58 @@ export class ClaudeProcessManager extends EventEmitter {
           404
         );
       }
-      
+
       workingDirectory = fetchedWorkingDirectory;
-      
+
       this.logger.debug('Found working directory for resume session', {
         sessionId: config.resumedSessionId,
         workingDirectory
       });
     }
-    
+
+    // Generate a temporary session ID for file saving (will be replaced with actual streamingId)
+    const tempSessionId = uuidv4();
+
+    // Handle file attachments - save to temp files and modify prompt
+    let modifiedConfig = { ...config };
+    if (config.attachments && config.attachments.length > 0) {
+      const effectiveWorkingDirectory = workingDirectory || config.workingDirectory || process.cwd();
+      const savedPaths = this.saveAttachmentsToTempDir(
+        config.attachments,
+        effectiveWorkingDirectory,
+        tempSessionId
+      );
+
+      if (savedPaths.length > 0) {
+        // Append file references to the prompt
+        const fileReferences = savedPaths.map((p, i) => {
+          const attachment = config.attachments![i];
+          return `[Attached file: ${attachment.name}] See: ${p}`;
+        }).join('\n');
+
+        modifiedConfig = {
+          ...config,
+          initialPrompt: `${config.initialPrompt}\n\n${fileReferences}`
+        };
+
+        this.logger.debug('Modified prompt with file references', {
+          tempSessionId,
+          fileCount: savedPaths.length,
+          newPromptLength: modifiedConfig.initialPrompt.length
+        });
+      }
+    }
+
     const args = isResume && config.resumedSessionId
-      ? this.buildResumeArgs({ sessionId: config.resumedSessionId, message: config.initialPrompt, permissionMode: config.permissionMode })
-      : this.buildStartArgs(config);
-      
+      ? this.buildResumeArgs({ sessionId: config.resumedSessionId, message: modifiedConfig.initialPrompt, permissionMode: config.permissionMode })
+      : this.buildStartArgs(modifiedConfig);
+
     const spawnConfig = {
       executablePath: config.claudeExecutablePath || this.claudeExecutablePath,
       cwd: workingDirectory || config.workingDirectory || process.cwd(),
       env: { ...process.env, ...this.envOverrides } as NodeJS.ProcessEnv
     };
-    
+
     this.logger.debug('Spawn config prepared', {
       executablePath: spawnConfig.executablePath,
       cwd: spawnConfig.cwd,
@@ -182,16 +293,25 @@ export class ClaudeProcessManager extends EventEmitter {
       envOverrideKeys: Object.keys(this.envOverrides),
       isResume
     });
-    
-    return this.executeConversationFlow(
+
+    const result = await this.executeConversationFlow(
       isResume ? 'resuming' : 'starting',
       isResume && config.resumedSessionId ? { resumeSessionId: config.resumedSessionId } : {},
-      config,
+      modifiedConfig,
       args,
       spawnConfig,
       isResume ? 'PROCESS_RESUME_FAILED' : 'PROCESS_START_FAILED',
       isResume ? 'Failed to resume Claude process' : 'Failed to start Claude process'
     );
+
+    // Transfer temp file tracking from tempSessionId to actual streamingId
+    const tempFiles = this.tempFilePaths.get(tempSessionId);
+    if (tempFiles) {
+      this.tempFilePaths.delete(tempSessionId);
+      this.tempFilePaths.set(result.streamingId, tempFiles);
+    }
+
+    return result;
   }
 
 
@@ -238,10 +358,11 @@ export class ClaudeProcessManager extends EventEmitter {
       }
 
       // Clean up
+      this.cleanupTempFiles(streamingId);
       this.processes.delete(streamingId);
       this.outputBuffers.delete(streamingId);
       this.conversationConfigs.delete(streamingId);
-      
+
       this.logger.info('Stopped and cleaned up process', { streamingId });
       return true;
     } catch (error) {
@@ -951,14 +1072,17 @@ export class ClaudeProcessManager extends EventEmitter {
   }
 
   private handleProcessClose(streamingId: string, code: number | null): void {
-    
+
     // Clear any pending timeouts for this session
     const timeouts = this.timeouts.get(streamingId);
     if (timeouts) {
       timeouts.forEach(timeout => clearTimeout(timeout));
       this.timeouts.delete(streamingId);
     }
-    
+
+    // Clean up temp files created for attachments
+    this.cleanupTempFiles(streamingId);
+
     this.processes.delete(streamingId);
     this.outputBuffers.delete(streamingId);
     const config = this.conversationConfigs.get(streamingId);

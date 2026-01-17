@@ -6,6 +6,7 @@ import { Header } from './Header';
 import { Composer, ComposerRef } from '@/web/chat/components/Composer';
 import { TaskTabs } from './TaskTabs';
 import { TaskList } from './TaskList';
+import type { FileAttachment } from '../../types';
 
 export function Home() {
   const navigate = useNavigate();
@@ -97,17 +98,20 @@ export function Home() {
     ? conversations[0].projectPath 
     : undefined;
 
-  const handleComposerSubmit = async (text: string, workingDirectory: string, model: string, permissionMode: string) => {
+  const handleComposerSubmit = async (text: string, workingDirectory?: string, model?: string, permissionMode?: string, attachments?: FileAttachment[]) => {
+    if (!workingDirectory) return;
+
     setIsSubmitting(true);
-    
+
     try {
       const response = await api.startConversation({
         workingDirectory,
         initialPrompt: text,
         model: model === 'default' ? undefined : model,
         permissionMode: permissionMode === 'default' ? undefined : permissionMode,
+        attachments,
       });
-      
+
       // Navigate to the conversation page
       navigate(`/c/${response.sessionId}`);
     } catch (error) {

@@ -5,7 +5,7 @@ import { Composer, ComposerRef } from '@/web/chat/components/Composer';
 import { ConversationHeader } from '../ConversationHeader/ConversationHeader';
 import { api } from '../../services/api';
 import { useStreaming, useConversationMessages } from '../../hooks';
-import type { ChatMessage, ConversationDetailsResponse, ConversationMessage, ConversationSummary } from '../../types';
+import type { ChatMessage, ConversationDetailsResponse, ConversationMessage, ConversationSummary, FileAttachment } from '../../types';
 
 export function ConversationView() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -179,7 +179,7 @@ export function ConversationView() {
     },
   });
 
-  const handleSendMessage = async (message: string, workingDirectory?: string, model?: string, permissionMode?: string) => {
+  const handleSendMessage = async (message: string, workingDirectory?: string, model?: string, permissionMode?: string, attachments?: FileAttachment[]) => {
     if (!sessionId) return;
 
     setError(null);
@@ -190,7 +190,8 @@ export function ConversationView() {
         initialPrompt: message,
         workingDirectory: workingDirectory || currentWorkingDirectory,
         model,
-        permissionMode
+        permissionMode,
+        attachments
       });
 
       // Navigate immediately to the new session

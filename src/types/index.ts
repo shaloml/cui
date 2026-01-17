@@ -1,6 +1,29 @@
 // Core types and interfaces for CUI backend
 import Anthropic from '@anthropic-ai/sdk';
 
+// File attachment types
+export interface FileAttachment {
+  id: string;
+  name: string;
+  type: 'image' | 'document';
+  mimeType: string;
+  size: number;
+  data: string;  // base64 encoded content
+}
+
+// Allowed MIME types for file uploads
+export const ALLOWED_FILE_TYPES = {
+  'image/png': 'image',
+  'image/jpeg': 'image',
+  'image/gif': 'image',
+  'image/webp': 'image',
+  'application/pdf': 'document',
+  'text/plain': 'document',
+} as const;
+
+export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+export const MAX_ATTACHMENTS = 10;
+
 // Tool metrics types
 export interface ToolMetrics {
   linesAdded: number;
@@ -132,6 +155,7 @@ export interface ConversationConfig {
   claudeExecutablePath?: string;
   previousMessages?: ConversationMessage[]; // Messages from previous session for resume context
   permissionMode?: string; // Permission mode: "acceptEdits" | "bypassPermissions" | "default" | "plan"
+  attachments?: FileAttachment[]; // Optional: file attachments
 }
 
 // API request/response types
@@ -144,6 +168,7 @@ export interface StartConversationRequest {
   systemPrompt?: string;
   permissionMode?: string; // Permission mode: "acceptEdits" | "bypassPermissions" | "default" | "plan"
   resumedSessionId?: string; // Optional: session ID to resume from
+  attachments?: FileAttachment[]; // Optional: file attachments
 }
 
 

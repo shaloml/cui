@@ -1,5 +1,5 @@
 import { Router, Request } from 'express';
-import { 
+import {
   StartConversationRequest,
   StartConversationResponse,
   ConversationListQuery,
@@ -11,7 +11,11 @@ import {
   SessionUpdateResponse,
   ConversationMessage,
   ConversationSummary,
-  SessionInfo
+  SessionInfo,
+  FileAttachment,
+  ALLOWED_FILE_TYPES,
+  MAX_FILE_SIZE,
+  MAX_ATTACHMENTS,
 } from '@/types/index.js';
 import { RequestWithRequestId } from '@/types/express.js';
 import { ClaudeProcessManager } from '@/services/claude-process-manager.js';
@@ -20,6 +24,54 @@ import { SessionInfoService } from '@/services/session-info-service.js';
 import { ConversationStatusManager } from '@/services/conversation-status-manager.js';
 import { createLogger } from '@/services/logger.js';
 import { ToolMetricsService } from '@/services/ToolMetricsService.js';
+
+/**
+ * Validates file attachments for conversation start requests
+ */
+function validateAttachments(attachments: FileAttachment[] | undefined): void {
+  if (!attachments || attachments.length === 0) {
+    return;
+  }
+
+  // Check max number of attachments
+  if (attachments.length > MAX_ATTACHMENTS) {
+    throw new CUIError(
+      'TOO_MANY_ATTACHMENTS',
+      `Maximum ${MAX_ATTACHMENTS} attachments allowed, got ${attachments.length}`,
+      400
+    );
+  }
+
+  for (const attachment of attachments) {
+    // Validate required fields
+    if (!attachment.id || !attachment.name || !attachment.mimeType || !attachment.data) {
+      throw new CUIError(
+        'INVALID_ATTACHMENT',
+        'Attachment must have id, name, mimeType, and data fields',
+        400
+      );
+    }
+
+    // Validate file type
+    if (!(attachment.mimeType in ALLOWED_FILE_TYPES)) {
+      throw new CUIError(
+        'UNSUPPORTED_FILE_TYPE',
+        `File type ${attachment.mimeType} is not supported. Allowed types: ${Object.keys(ALLOWED_FILE_TYPES).join(', ')}`,
+        400
+      );
+    }
+
+    // Validate file size (base64 data size * 0.75 gives approximate original size)
+    const estimatedSize = Math.ceil(attachment.data.length * 0.75);
+    if (estimatedSize > MAX_FILE_SIZE) {
+      throw new CUIError(
+        'FILE_TOO_LARGE',
+        `File ${attachment.name} exceeds maximum size of 10MB`,
+        400
+      );
+    }
+  }
+}
 
 export function createConversationRoutes(
   processManager: ClaudeProcessManager,
@@ -63,7 +115,10 @@ export function createConversationRoutes(
           throw new CUIError('INVALID_PERMISSION_MODE', `permissionMode must be one of: ${validModes.join(', ')}`, 400);
         }
       }
-      
+
+      // Validate attachments if provided
+      validateAttachments(req.body.attachments);
+
       // If resuming, fetch previous messages and session info
       let previousMessages: ConversationMessage[] = [];
       let inheritedPermissionMode: string | undefined;
