@@ -67,6 +67,11 @@ export interface Theme {
   colorScheme: 'light' | 'dark' | 'system';
 }
 
+export interface Direction {
+  dir: 'ltr' | 'rtl';
+  setting: 'ltr' | 'rtl' | 'auto';
+}
+
 export interface ApiError {
   error: string;
   code?: string;
@@ -88,6 +93,7 @@ export interface WorkingDirectoriesResponse {
 export interface Preferences {
   colorScheme: 'light' | 'dark' | 'system';
   language: string;
+  direction?: 'ltr' | 'rtl' | 'auto';
   notifications?: {
     enabled: boolean;
     ntfyUrl?: string;

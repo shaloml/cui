@@ -415,7 +415,7 @@ export const DropdownSelector = forwardRef<HTMLDivElement, DropdownSelectorProps
                       onSelect={() => handleOptionClick(option)}
                       disabled={option.disabled}
                       className={cn(
-                        "flex items-center justify-between w-full px-3 py-2.5 rounded-[10px] cursor-pointer transition-all gap-4 text-left text-sm text-neutral-900 dark:text-neutral-100 mb-px",
+                        "flex items-center justify-between w-full px-3 py-2.5 rounded-[10px] cursor-pointer transition-all gap-4 text-start text-sm text-neutral-900 dark:text-neutral-100 mb-px",
                         "hover:bg-black/5 dark:hover:bg-white/5",
                         "focus:bg-black/5 dark:focus:bg-white/5 focus:outline-none",
                         "disabled:opacity-50 disabled:cursor-not-allowed",
@@ -428,7 +428,7 @@ export const DropdownSelector = forwardRef<HTMLDivElement, DropdownSelectorProps
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         {renderOption ? renderOption(option) : (
-                          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap direction-rtl text-left">
+                          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap direction-rtl text-start">
                             {option.label}
                           </span>
                         )}

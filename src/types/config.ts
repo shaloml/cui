@@ -25,6 +25,7 @@ export interface GeminiConfig {
 export interface InterfaceConfig {
   colorScheme: 'light' | 'dark' | 'system';
   language: string;
+  direction?: 'ltr' | 'rtl' | 'auto';
   notifications?: {
     enabled: boolean;
     ntfyUrl?: string;
@@ -81,6 +82,7 @@ export const DEFAULT_CONFIG: Omit<CUIConfig, 'machine_id' | 'authToken'> = {
   },
   interface: {
     colorScheme: 'system',
-    language: 'en'
+    language: 'en',
+    direction: 'auto'
   }
 };

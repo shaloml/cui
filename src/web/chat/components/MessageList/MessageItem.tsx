@@ -123,7 +123,7 @@ export function MessageItem({
           {shouldShowExpandButton && (
             <button
               onClick={() => setIsUserMessageExpanded(!isUserMessageExpanded)}
-              className="absolute top-2 right-2 w-6 h-6 border-none bg-transparent text-neutral-600 cursor-pointer flex items-center justify-center p-0 z-10 hover:text-neutral-900"
+              className="absolute top-2 end-2 w-6 h-6 border-none bg-transparent text-neutral-600 cursor-pointer flex items-center justify-center p-0 z-10 hover:text-neutral-900"
               aria-label={isUserMessageExpanded ? "Show fewer lines" : "Show all lines"}
             >
               {isUserMessageExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}

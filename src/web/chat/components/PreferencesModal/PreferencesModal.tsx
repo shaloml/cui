@@ -20,7 +20,8 @@ interface Props {
 export function PreferencesModal({ onClose }: Props) {
   const [prefs, setPrefs] = useState<Preferences>({
     colorScheme: 'system',
-    language: 'auto-detect'
+    language: 'auto-detect',
+    direction: 'auto'
   });
   const [archiveStatus, setArchiveStatus] = useState<string>('');
   const [machineId, setMachineId] = useState<string>('');
@@ -56,6 +57,21 @@ export function PreferencesModal({ onClose }: Props) {
           document.documentElement.classList.remove('dark');
         }
       }
+    }
+    if (updates.direction) {
+      // Apply direction to document
+      const RTL_LANGUAGES = ['ar', 'he', 'fa', 'ur', 'yi', 'ps', 'sd', 'ug'];
+      let dir: 'ltr' | 'rtl';
+      if (updates.direction === 'auto') {
+        const lang = navigator.language || 'en';
+        const primaryLang = lang.split('-')[0].toLowerCase();
+        dir = RTL_LANGUAGES.includes(primaryLang) ? 'rtl' : 'ltr';
+      } else {
+        dir = updates.direction;
+      }
+      document.documentElement.dir = dir;
+      document.documentElement.setAttribute('data-direction', dir);
+      localStorage.setItem('cui-direction', updates.direction);
     }
   };
 
@@ -132,14 +148,14 @@ export function PreferencesModal({ onClose }: Props) {
           <div className="flex flex-1 overflow-hidden">
             {/* Minimal sidebar: remove bg/shadow/highlight bar, use subtle text and outline cues */}
             <div className="border-r border-neutral-200 dark:border-neutral-800 min-w-[200px] max-w-[240px] flex flex-col h-full">
-              <TabsList className="flex flex-col h-auto p-2 pl-6 gap-1 bg-transparent">
+              <TabsList className="flex flex-col h-auto p-2 ps-6 gap-1 bg-transparent">
                 <TabsTrigger
                   value="general"
                   className="w-full flex items-center justify-start gap-3 px-3 py-2 rounded-md bg-transparent text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100/60 dark:hover:bg-neutral-800/60 data-[state=active]:bg-neutral-100 dark:data-[state=active]:bg-neutral-800 data-[state=active]:text-neutral-900 dark:data-[state=active]:text-neutral-100 data-[state=active]:font-medium"
                   aria-label="General settings"
                 >
                   <Settings className="h-[18px] w-[18px] flex-shrink-0" />
-                  <span className="text-left">General</span>
+                  <span className="text-start">General</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="notifications"
@@ -147,7 +163,7 @@ export function PreferencesModal({ onClose }: Props) {
                   aria-label="Notification settings"
                 >
                   <Bell className="h-[18px] w-[18px] flex-shrink-0" />
-                  <span className="text-left">Notifications</span>
+                  <span className="text-start">Notifications</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="dataControls"
@@ -155,7 +171,7 @@ export function PreferencesModal({ onClose }: Props) {
                   aria-label="Data control settings"
                 >
                   <Shield className="h-[18px] w-[18px] flex-shrink-0" />
-                  <span className="text-left">Data controls</span>
+                  <span className="text-start">Data controls</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="voiceInput"
@@ -163,7 +179,7 @@ export function PreferencesModal({ onClose }: Props) {
                   aria-label="Voice input settings"
                 >
                   <Mic className="h-[18px] w-[18px] flex-shrink-0" />
-                  <span className="text-left">Voice Input</span>
+                  <span className="text-start">Voice Input</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="modelProvider"
@@ -171,7 +187,7 @@ export function PreferencesModal({ onClose }: Props) {
                   aria-label="Model provider settings"
                 >
                   <Cpu className="h-[18px] w-[18px] flex-shrink-0" />
-                  <span className="text-left">Model Provider</span>
+                  <span className="text-start">Model Provider</span>
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -198,6 +214,28 @@ export function PreferencesModal({ onClose }: Props) {
                       <SelectItem value="light">Light</SelectItem>
                       <SelectItem value="dark">Dark</SelectItem>
                       <SelectItem value="system">System</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between min-h-[60px] py-2">
+                  <Label htmlFor="direction-select" className="text-sm text-neutral-900 dark:text-neutral-100 font-normal">
+                    Text Direction
+                  </Label>
+                  <Select
+                    value={prefs.direction || 'auto'}
+                    onValueChange={(value) => update({ direction: value as 'ltr' | 'rtl' | 'auto' })}
+                  >
+                    <SelectTrigger
+                      id="direction-select"
+                      className="w-[120px] h-9 bg-white dark:bg-neutral-900 border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800 focus:bg-neutral-100 dark:focus:bg-neutral-800"
+                      aria-label="Select text direction"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto</SelectItem>
+                      <SelectItem value="ltr">LTR</SelectItem>
+                      <SelectItem value="rtl">RTL</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -1,16 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
-import type { Preferences, Theme } from '../types';
+import type { Preferences, Theme, Direction } from '../types';
+import { detectBrowserRTL, resolveDirection, applyDirection } from '../hooks/useDirection';
 
 interface PreferencesContextType {
   preferences: Preferences | null;
   theme: Theme;
+  direction: Direction;
   updatePreferences: (updates: Partial<Preferences>) => Promise<void>;
   isLoading: boolean;
   error: Error | null;
 }
 
 const THEME_KEY = 'cui-theme';
+const DIRECTION_KEY = 'cui-direction';
 
 const PreferencesContext = createContext<PreferencesContextType | undefined>(undefined);
 
@@ -30,6 +33,13 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     return { mode, colorScheme, toggle: () => {} };
   });
 
+  const [direction, setDirection] = useState<Direction>(() => {
+    const stored = localStorage.getItem(DIRECTION_KEY);
+    const setting = (stored === 'ltr' || stored === 'rtl' || stored === 'auto') ? stored : 'auto';
+    const dir = resolveDirection(setting);
+    return { dir, setting };
+  });
+
   // Load preferences once on mount
   useEffect(() => {
     const loadPreferences = async () => {
@@ -37,9 +47,14 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
         setIsLoading(true);
         const config = await api.getConfig();
         setPreferences(config.interface);
-        
+
         const mode = config.interface.colorScheme === 'system' ? getSystemTheme() : config.interface.colorScheme;
         setTheme(prev => ({ ...prev, colorScheme: config.interface.colorScheme, mode }));
+
+        // Set direction from config
+        const directionSetting = config.interface.direction || 'auto';
+        const dir = resolveDirection(directionSetting);
+        setDirection({ dir, setting: directionSetting });
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to load preferences'));
       } finally {
@@ -62,6 +77,12 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     localStorage.setItem(THEME_KEY, theme.colorScheme);
   }, [theme.mode, theme.colorScheme]);
 
+  // Apply direction to document
+  useEffect(() => {
+    applyDirection(direction.dir);
+    localStorage.setItem(DIRECTION_KEY, direction.setting);
+  }, [direction.dir, direction.setting]);
+
   // Listen for system theme changes
   useEffect(() => {
     if (theme.colorScheme !== 'system') return;
@@ -79,10 +100,15 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     try {
       const updatedConfig = await api.updateConfig({ interface: updates });
       setPreferences(updatedConfig.interface);
-      
+
       if (updates.colorScheme) {
         const mode = updates.colorScheme === 'system' ? getSystemTheme() : updates.colorScheme;
         setTheme(prev => ({ ...prev, colorScheme: updates.colorScheme!, mode }));
+      }
+
+      if (updates.direction) {
+        const dir = resolveDirection(updates.direction);
+        setDirection({ dir, setting: updates.direction });
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to update preferences'));
@@ -110,12 +136,13 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   };
 
   return (
-    <PreferencesContext.Provider value={{ 
-      preferences, 
-      theme: themeWithToggle, 
-      updatePreferences, 
-      isLoading, 
-      error 
+    <PreferencesContext.Provider value={{
+      preferences,
+      theme: themeWithToggle,
+      direction,
+      updatePreferences,
+      isLoading,
+      error
     }}>
       {children}
     </PreferencesContext.Provider>

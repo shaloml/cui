@@ -243,7 +243,7 @@ export const CodeHighlight: React.FC<CodeHighlightProps> = ({
                       variant="ghost"
                       size="icon"
                       onClick={() => setIsExpanded(!isExpanded)}
-                      className="absolute top-2 right-2 h-6 w-6 z-10 text-muted-foreground hover:text-foreground"
+                      className="absolute top-2 end-2 h-6 w-6 z-10 text-muted-foreground hover:text-foreground"
                       aria-label={isExpanded ? "Show fewer lines" : "Show all lines"}
                     >
                       {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
@@ -269,7 +269,7 @@ export const CodeHighlight: React.FC<CodeHighlightProps> = ({
                   return (
                     <div key={i} {...lineProps} className="table-row">
                       {showLineNumbers && (
-                        <span className="table-cell text-right pr-4 select-none text-neutral-500 dark:text-neutral-400 min-w-[2.5rem] bg-transparent">
+                        <span className="table-cell text-end pe-4 select-none text-neutral-500 dark:text-neutral-400 min-w-[2.5rem] bg-transparent">
                           {i + 1}
                         </span>
                       )}
@@ -287,7 +287,7 @@ export const CodeHighlight: React.FC<CodeHighlightProps> = ({
                 {!isExpanded && shouldShowExpandButton && (
                   <div className="table-row">
                     {showLineNumbers && (
-                      <span className="table-cell text-right pr-4 select-none text-neutral-500 dark:text-neutral-400 min-w-[2.5rem] bg-transparent"></span>
+                      <span className="table-cell text-end pe-4 select-none text-neutral-500 dark:text-neutral-400 min-w-[2.5rem] bg-transparent"></span>
                     )}
                     <span className="table-cell w-full whitespace-pre-wrap break-words text-neutral-500 dark:text-neutral-400 italic">
                       ... +{hiddenLinesCount} lines

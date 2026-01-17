@@ -865,7 +865,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
             ) : (
               <Textarea
                 ref={textareaRef}
-                className="min-h-[80px] max-h-[80vh] pt-4 pr-[60px] pb-[50px] border-none bg-transparent text-foreground font-sans text-base leading-relaxed resize-none outline-none overflow-y-auto scrollbar-thin ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="min-h-[80px] max-h-[80vh] pt-4 pe-[60px] pb-[50px] border-none bg-transparent text-foreground font-sans text-base leading-relaxed resize-none outline-none overflow-y-auto scrollbar-thin ring-0 focus-visible:ring-0 focus-visible:ring-offset-0"
                 placeholder={permissionRequest && showPermissionUI ? "Deny and tell Claude what to do" : placeholder}
                 value={value}
                 onChange={handleTextChange}
@@ -890,7 +890,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
           </div>
 
           {(showDirectorySelector || showModelSelector) && audioState === 'idle' && (
-            <div className="absolute bottom-2 left-6 right-10 flex items-center justify-center overflow-visible">
+            <div className="absolute bottom-2 start-6 end-10 flex items-center justify-center overflow-visible">
               <div className="flex gap-2 w-full justify-between">
                 <div className="flex gap-2">
                   {/* Working Directory Selector */}
@@ -916,7 +916,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
           )}
 
           {/* Dynamic Action Button */}
-          <div className="absolute right-2.5 bottom-2 flex items-center justify-center gap-2">
+          <div className="absolute end-2.5 bottom-2 flex items-center justify-center gap-2">
             {audioState === 'recording' || audioState === 'processing' ? (
               /* Recording/Processing State: Show tick and cross */
               <div className="flex items-center gap-2">
@@ -1076,7 +1076,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
                           <span className="text-sm font-medium">{option.label}</span>
                         </div>
                         {option.description && (
-                          <span className="text-xs text-muted-foreground/80 pl-[22px]">{option.description}</span>
+                          <span className="text-xs text-muted-foreground/80 ps-[22px]">{option.description}</span>
                         )}
                       </div>
                     )}

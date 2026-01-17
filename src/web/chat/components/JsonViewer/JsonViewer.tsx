@@ -52,7 +52,7 @@ export function JsonViewer({ data, collapsed = false, depth = 0 }: JsonViewerPro
       return (
         <span className="inline-block">
           <button
-            className="inline-flex items-center justify-center w-4 h-4 mr-0.5 text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors"
+            className="inline-flex items-center justify-center w-4 h-4 me-0.5 text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors"
             onClick={() => setIsCollapsed(!isCollapsed)}
             aria-label={isCollapsed ? 'Expand array' : 'Collapse array'}
           >
@@ -62,10 +62,10 @@ export function JsonViewer({ data, collapsed = false, depth = 0 }: JsonViewerPro
           {isCollapsed ? (
             <span className="text-neutral-500 dark:text-neutral-400 italic mx-1">...{value.length} items</span>
           ) : (
-            <div className="ml-[18px]">
+            <div className="ms-[18px]">
               {value.map((item, index) => (
                 <div key={index} className="my-0.5">
-                  <span className="text-muted-foreground mr-1">{index}:</span>
+                  <span className="text-muted-foreground me-1">{index}:</span>
                   {renderValue(item)}
                   {index < value.length - 1 && <span className="text-foreground">,</span>}
                 </div>
@@ -86,7 +86,7 @@ export function JsonViewer({ data, collapsed = false, depth = 0 }: JsonViewerPro
       return (
         <span className="inline-block">
           <button
-            className="inline-flex items-center justify-center w-4 h-4 mr-0.5 text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors"
+            className="inline-flex items-center justify-center w-4 h-4 me-0.5 text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white transition-colors"
             onClick={() => setIsCollapsed(!isCollapsed)}
             aria-label={isCollapsed ? 'Expand object' : 'Collapse object'}
           >
@@ -96,7 +96,7 @@ export function JsonViewer({ data, collapsed = false, depth = 0 }: JsonViewerPro
           {isCollapsed ? (
             <span className="text-neutral-500 dark:text-neutral-400 italic mx-1">...{entries.length} properties</span>
           ) : (
-            <div className="ml-[18px]">
+            <div className="ms-[18px]">
               {entries.map(([k, v], index) => (
                 <div key={k} className="my-0.5">
                   <span className="text-blue-700 dark:text-blue-300">"{k}"</span>
@@ -121,7 +121,7 @@ export function JsonViewer({ data, collapsed = false, depth = 0 }: JsonViewerPro
         <Button
           variant="ghost"
           size="icon"
-          className="absolute top-1 right-1 h-6 w-6 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="absolute top-1 end-1 h-6 w-6 bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700"
           onClick={handleCopy}
           aria-label="Copy JSON to clipboard"
         >

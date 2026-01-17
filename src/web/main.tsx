@@ -20,6 +20,28 @@ import './styles/index.css'
   } catch {}
 })();
 
+// Set initial direction before React mounts to avoid FOUC
+(() => {
+  try {
+    const RTL_LANGUAGES = ['ar', 'he', 'fa', 'ur', 'yi', 'ps', 'sd', 'ug'];
+    const storageKey = 'cui-direction';
+    const stored = localStorage.getItem(storageKey);
+    const setting = (stored === 'ltr' || stored === 'rtl' || stored === 'auto') ? stored : 'auto';
+
+    let dir: 'ltr' | 'rtl';
+    if (setting === 'auto') {
+      const lang = navigator.language || 'en';
+      const primaryLang = lang.split('-')[0].toLowerCase();
+      dir = RTL_LANGUAGES.includes(primaryLang) ? 'rtl' : 'ltr';
+    } else {
+      dir = setting;
+    }
+
+    document.documentElement.dir = dir;
+    document.documentElement.setAttribute('data-direction', dir);
+  } catch {}
+})();
+
 // Update theme color meta tag based on CSS variables
 const updateThemeColor = () => {
   const computedStyle = getComputedStyle(document.documentElement);
