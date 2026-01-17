@@ -1,98 +1,119 @@
-# Testing Architecture
+# CLAUDE.md
 
-This directory contains comprehensive test coverage for CUI services.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Testing Philosophy
+## Project Overview
 
-- **Prefer real implementations** over mocks when testing (per project guidelines)
-- **Comprehensive unit test coverage** for all services (90%+ target)
-- **Mock Claude CLI** using `tests/__mocks__/claude` script for consistent testing
-- **Silent logging** in tests (LOG_LEVEL=silent) to reduce noise
+CUI (Common Agent UI) is a web-based interface for AI agents built on Claude Code SDK. It's a full-stack TypeScript application that enables users to start, manage, and interact with agentic conversations from any browser.
 
-## Test Structure
+## Common Commands
 
-```
-tests/
-├── __mocks__
-│   └── claude
-├── integration
-│   ├── conversation-status-integration.test.ts
-│   ├── real-claude-integration.test.ts
-│   └── streaming-integration.test.ts
-├── setup.ts
-├── unit
-│   ├── cui-server.test.ts
-│   ├── claude-history-reader.test.ts
-│   ├── claude-process-long-running.test.ts
-│   ├── claude-process-manager.test.ts
-│   ├── cli
-│   │   ├── get.test.ts
-│   │   ├── list.test.ts
-│   │   ├── serve.test.ts
-│   │   ├── status-simple.test.ts
-│   │   ├── status-working.test.ts
-│   │   └── status.test.ts
-│   ├── conversation-status-tracker.test.ts
-│   ├── json-lines-parser.test.ts
-│   └── stream-manager.test.ts
-└── utils
-    └── test-helpers.ts
+```bash
+# Development
+npm run dev              # Backend with tsx watch
+npm run dev:web          # Frontend with Vite
+
+# Build
+npm run build            # Full production build (web + server + mcp)
+
+# Testing
+npm test                 # Run all tests
+npm run unit-tests       # Unit tests only
+npm run integration-tests # Integration tests only
+npm test -- tests/unit/claude-process-manager.test.ts  # Run specific test file
+npm test -- --testNamePattern="should start"           # Run tests matching pattern
+npm run test:coverage    # Run with coverage
+
+# Code Quality
+npm run lint             # ESLint
+npm run typecheck        # TypeScript check
 ```
 
-## Mock Claude CLI
+## Architecture
 
-The project includes a mock Claude CLI (`tests/__mocks__/claude`) that:
-- Simulates real Claude CLI behavior for testing
-- Outputs valid JSONL stream format
-- Supports various command line arguments
-- Enables testing without requiring actual Claude CLI installation
+### Backend Structure
 
-## Testing Patterns
+The server is built with Express and follows a service-oriented architecture:
+
+- **Entry Point**: `src/server.ts` → CLI entry, `src/cui-server.ts` → Main server class
+- **Services** (`src/services/`): Core business logic
+  - `claude-process-manager.ts` - Manages Claude CLI process lifecycle and streaming
+  - `claude-history-reader.ts` - Reads Claude Code conversation history from `~/.claude/`
+  - `stream-manager.ts` - Real-time message streaming via EventSource
+  - `session-info-service.ts` - Session metadata using SQLite
+  - `permission-tracker.ts` - Tool permission management
+  - `config-service.ts` - Server configuration from `~/.cui/config.json`
+- **Routes** (`src/routes/`): REST API endpoints
+- **Middleware** (`src/middleware/`): Auth, CORS, error handling, request logging
+- **MCP Server** (`src/mcp-server/`): Standalone Model Context Protocol server for permission requests
+
+### Frontend Structure
+
+React 18 application in `src/web/`:
+
+- `chat/` - Main chat interface with components, contexts, hooks
+- `components/` - Shared UI components (Login, etc.)
+- `inspector/` - Debug/inspection tools
+- Built with Vite, Tailwind CSS v4, Radix UI
+
+### Key Data Flow
+
+1. User sends message via React frontend
+2. `conversation.routes.ts` receives request
+3. `ClaudeProcessManager` spawns Claude CLI process
+4. `StreamManager` forwards JSONL events via EventSource to frontend
+5. `PermissionTracker` handles tool permission requests via MCP server
+
+### Type System
+
+Core types in `src/types/index.ts`:
+- `StreamMessage` - System, Assistant, User, Result message types
+- `ConversationSummary`, `ConversationMessage` - Conversation data
+- `CUIError` - Centralized error handling
+
+## Testing
+
+### Philosophy
+
+- Prefer real implementations over mocks when possible
+- Target 90%+ unit test coverage
+- Use mock Claude CLI (`tests/__mocks__/claude`) for consistent testing
+- Silent logging in tests (`LOG_LEVEL=silent`)
+
+### Mock Claude CLI
+
+The mock at `tests/__mocks__/claude` simulates real Claude CLI behavior with valid JSONL output. Use it in tests:
 
 ```typescript
-// Integration test pattern with mock Claude CLI
 function getMockClaudeExecutablePath(): string {
   return path.join(process.cwd(), 'tests', '__mocks__', 'claude');
 }
 
-// Server setup with random port to avoid conflicts
 const serverPort = 9000 + Math.floor(Math.random() * 1000);
 const server = new CUIServer({ port: serverPort });
-
-// Override ProcessManager with mock path
-const mockClaudePath = getMockClaudeExecutablePath();
-const { ClaudeProcessManager } = await import('@/services/claude-process-manager');
 (server as any).processManager = new ClaudeProcessManager(mockClaudePath);
 ```
 
-## Test Configuration
+### Test Structure
 
-- **Vitest** for fast and modern testing with TypeScript support
-- **Path mapping** using `@/` aliases matching source structure
-
-## Test Commands
-
-```bash
-# Run specific test files
-npm test -- claude-process-manager.test.ts
-npm test -- tests/unit/
-
-# Run tests matching a pattern
-npm test -- --testNamePattern="should start conversation"
-
-# Run unit tests only
-npm run unit-tests
-
-# Run integration tests only
-npm run integration-tests
-
-# Run with coverage
-npm run test:coverage
+```
+tests/
+├── __mocks__/claude     # Mock Claude CLI executable
+├── integration/         # Integration tests
+├── unit/               # Unit tests (services, CLI commands)
+└── setup.ts            # Vitest setup
 ```
 
-## Development Practices
+## Configuration
 
-- **Meaningful test names** and comprehensive test coverage
-- **Silent logging** in tests (LOG_LEVEL=silent) to reduce noise
-- **Random ports** for server tests to avoid conflicts
-- **Proper cleanup** of resources and processes in tests
+- User config stored in `~/.cui/config.json`
+- Session data in `~/.cui/session-info.db` (SQLite)
+- Path aliases: `@/` maps to `src/` in both source and tests
+
+## Key Dependencies
+
+- `@anthropic-ai/claude-code` - Claude Code SDK
+- `express` - HTTP server
+- `better-sqlite3` - Session storage
+- `pino` - Logging
+- React, Vite, Tailwind - Frontend

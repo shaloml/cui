@@ -87,6 +87,40 @@ All inline syntaxes like `/init` or `@file.txt` are supported just like in the C
 2. Ensure you use a secure auth token if accessing the server from outside your local network. The auth token is generated when you start the server and can be changed in the `~/.cui/config.json` file.
 3. Recommended: Use HTTPS to access the server. You can use a reverse proxy like [Caddy](https://caddyserver.com/) to set this up. On iOS, the dictation feature is only available when using HTTPS.
 
+### Docker Deployment
+
+cui includes Docker support for server deployments. Use Docker when:
+
+- **Remote Server Deployment**: Running cui on a cloud server or VPS
+- **Isolated Environment**: Need a clean, reproducible environment
+- **Service Management**: Want automatic restarts and easy updates
+
+**When NOT to use Docker** (run directly instead):
+
+- **Local Development**: Git credentials, SSH keys, and dev tools work seamlessly
+- **Full Tool Access**: All system tools (npm, python, etc.) are available
+- **File Permissions**: No volume mount permission issues
+
+**Quick Start with Docker:**
+
+```bash
+# Build and run
+docker compose up -d cui-server
+
+# Access at http://<server-ip>:9090
+docker logs cui-server | grep token
+```
+
+**Docker Compose Configuration:**
+
+The `docker-compose.yml` mounts:
+- `~/.claude` - Claude Code configuration
+- `~/.cui` - CUI configuration
+- `~/.local/bin/claude` - Host's Claude Code CLI
+- Project directories for working files
+
+Edit `docker-compose.yml` to adjust mounted directories for your setup.
+
 ### Configuration
 
 All configuration and data are stored in `~/.cui/`.

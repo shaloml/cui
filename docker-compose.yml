@@ -1,0 +1,54 @@
+services:
+  cui-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cui-server
+    ports:
+      - "9090:9090"
+    environment:
+      - NODE_ENV=production
+      - PORT=9090
+      # Use host's Claude Code installation
+      - CLAUDE_EXECUTABLE_PATH=/usr/local/bin/claude
+    volumes:
+      # Mount host's Claude Code configuration
+      - ~/.claude:/root/.claude:rw
+      # Mount host's CUI configuration
+      - ~/.cui:/root/.cui:rw
+      # Mount host's Claude Code CLI (adjust path based on your installation)
+      - ~/.local/bin/claude:/usr/local/bin/claude:ro
+      # Mount working directories with same path as host
+      - /home/shalom/projects:/home/shalom/projects:rw
+    restart: unless-stopped
+    # Allow access to host network for external APIs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Development variant with hot reload
+  cui-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: cui-dev
+    ports:
+      - "3000:3000"
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - CLAUDE_EXECUTABLE_PATH=/usr/local/bin/claude
+    volumes:
+      - ~/.claude:/root/.claude:rw
+      - ~/.cui:/root/.cui:rw
+      - ~/.local/bin/claude:/usr/local/bin/claude:ro
+      - ~/projects:/root/projects:rw
+      # For development, mount source code for hot reload
+      - ./src:/app/src:rw
+      - ./package.json:/app/package.json:ro
+    command: npm run dev
+    profiles:
+      - dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
