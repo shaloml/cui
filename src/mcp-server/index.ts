@@ -391,14 +391,26 @@ async function processQuestions(questions: Array<{
 
       if (answeredQuestion && answeredQuestion.status === 'answered') {
         logger.debug('Question answered', { questionRequestId, answers: answeredQuestion.answers });
-        // If coming from approval_prompt, format response as approval with answers
-        const responseData = fromApprovalPrompt
-          ? { behavior: 'allow', message: 'User answered the questions', answers: answeredQuestion.answers }
-          : { answers: answeredQuestion.answers };
+        // For approval_prompt, we need to tell Claude Code to allow the tool
+        // and provide the collected answers as part of the result
+        if (fromApprovalPrompt) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                behavior: 'allow',
+                updatedInput: {
+                  questions,
+                  answers: answeredQuestion.answers
+                }
+              }),
+            }],
+          };
+        }
         return {
           content: [{
             type: 'text' as const,
-            text: JSON.stringify(responseData),
+            text: JSON.stringify({ answers: answeredQuestion.answers }),
           }],
         };
       }

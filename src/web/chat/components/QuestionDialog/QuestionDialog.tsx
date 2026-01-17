@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Check, Circle, Square, CheckSquare } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -19,6 +19,14 @@ interface QuestionSectionProps {
 function QuestionSection({ question, selectedAnswer, onAnswerChange }: QuestionSectionProps) {
   const [customAnswer, setCustomAnswer] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const customInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus input when it becomes visible
+  useEffect(() => {
+    if (showCustomInput && customInputRef.current) {
+      customInputRef.current.focus();
+    }
+  }, [showCustomInput]);
 
   const handleOptionClick = useCallback((label: string) => {
     if (question.multiSelect) {
@@ -63,6 +71,12 @@ function QuestionSection({ question, selectedAnswer, onAnswerChange }: QuestionS
     return selectedAnswer === label;
   }, [question.multiSelect, selectedAnswer]);
 
+  // Get custom answers (answers that are not in the predefined options)
+  const predefinedLabels = question.options.map(o => o.label);
+  const customAnswers: string[] = question.multiSelect
+    ? (Array.isArray(selectedAnswer) ? selectedAnswer.filter(a => !predefinedLabels.includes(a)) : [])
+    : (selectedAnswer && !predefinedLabels.includes(selectedAnswer as string) ? [selectedAnswer as string] : []);
+
   return (
     <div className="mb-4 last:mb-0">
       <div className="text-sm font-medium text-white mb-2">{question.question}</div>
@@ -106,48 +120,79 @@ function QuestionSection({ question, selectedAnswer, onAnswerChange }: QuestionS
           </button>
         ))}
 
-        {/* "Other" option */}
-        <button
-          type="button"
-          onClick={() => handleOptionClick('__other__')}
-          className={`w-full text-start px-3 py-2 rounded-lg border transition-all ${
-            showCustomInput
-              ? 'border-blue-500 bg-blue-500/10'
-              : 'border-border hover:border-muted-foreground/30 bg-background'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <div className="flex-shrink-0">
-              {question.multiSelect ? (
-                <Square size={16} className="text-muted-foreground" />
-              ) : (
-                <Circle size={16} className="text-muted-foreground" />
-              )}
+        {/* Display custom answers */}
+        {customAnswers.map((customAns, idx) => (
+          <div
+            key={`custom-${idx}`}
+            className="w-full text-start px-3 py-2 rounded-lg border border-blue-500 bg-blue-500/10"
+          >
+            <div className="flex items-start gap-2">
+              <div className="flex-shrink-0 mt-0.5">
+                {question.multiSelect ? (
+                  <CheckSquare size={16} className="text-blue-500" />
+                ) : (
+                  <div className="w-4 h-4 rounded-full border-2 border-blue-500 flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-foreground">{customAns}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Custom answer</div>
+              </div>
             </div>
-            <div className="text-sm text-muted-foreground">Other...</div>
           </div>
-        </button>
+        ))}
+
+        {/* "Other" option - only show if no custom answer for single-select, or always for multi-select */}
+        {(question.multiSelect || customAnswers.length === 0) && (
+          <button
+            type="button"
+            onClick={() => handleOptionClick('__other__')}
+            className={`w-full text-start px-3 py-2 rounded-lg border transition-all ${
+              showCustomInput
+                ? 'border-blue-500 bg-blue-500/10'
+                : 'border-border hover:border-muted-foreground/30 bg-background'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <div className="flex-shrink-0">
+                {question.multiSelect ? (
+                  <Square size={16} className="text-muted-foreground" />
+                ) : (
+                  <Circle size={16} className="text-muted-foreground" />
+                )}
+              </div>
+              <div className="text-sm text-muted-foreground">Other...</div>
+            </div>
+          </button>
+        )}
 
         {/* Custom input */}
         {showCustomInput && (
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
             <Input
+              ref={customInputRef}
               value={customAnswer}
               onChange={(e) => setCustomAnswer(e.target.value)}
               placeholder="Enter your answer..."
               className="flex-1"
               onKeyDown={(e) => {
+                e.stopPropagation();
                 if (e.key === 'Enter') {
                   e.preventDefault();
                   handleCustomSubmit();
                 }
               }}
-              autoFocus
             />
             <Button
               type="button"
               size="sm"
-              onClick={handleCustomSubmit}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleCustomSubmit();
+              }}
               disabled={!customAnswer.trim()}
             >
               Add
@@ -200,6 +245,8 @@ export function QuestionDialog({ questionRequest, isVisible, onSubmit }: Questio
       className="absolute bottom-full left-1/2 -translate-x-1/2 z-[1000] mb-3 w-full"
       role="dialog"
       aria-label="Question dialog"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
     >
       <div className="bg-black border border-border rounded-xl shadow-[0_0_10px_rgba(0,0,0,0.15)] w-full max-h-[70vh] flex flex-col overflow-hidden animate-slide-up">
         <div className="px-4 pt-3">
@@ -223,6 +270,7 @@ export function QuestionDialog({ questionRequest, isVisible, onSubmit }: Questio
         </div>
         <div className="px-4 pb-4 flex justify-end">
           <Button
+            type="button"
             onClick={handleSubmit}
             disabled={!allQuestionsAnswered}
             className="bg-blue-600 hover:bg-blue-700 text-white"

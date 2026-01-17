@@ -61,23 +61,26 @@ export function ToolContent({
     return null;
   }
 
-  // Handle error display at root level
-  if (isError) {
+  // Skip error display for AskUserQuestion - these are handled via QuestionDialog
+  const isQuestionTool = toolName === 'AskUserQuestion' || toolName === 'mcp__cui-permissions__ask_user_question';
+
+  // Handle error display at root level (skip for question tools)
+  if (isError && !isQuestionTool) {
     const errorMessage = resultContent || 'Tool execution failed';
     const firstLine = errorMessage.split('\n')[0].trim();
     const hasMultipleLines = errorMessage.includes('\n');
-    
+
     return (
       <div className="flex flex-col gap-1 -mt-0.5">
         <Collapsible open={isErrorExpanded} onOpenChange={setIsErrorExpanded}>
           <CollapsibleTrigger className="flex items-center gap-1 text-sm text-destructive cursor-pointer select-none hover:text-destructive/80" aria-label="Toggle error details">
-            <CornerDownRight 
-              size={12} 
+            <CornerDownRight
+              size={12}
               className={`transition-transform ${isErrorExpanded ? 'rotate-90' : ''}`}
             />
             Error: {firstLine}
           </CollapsibleTrigger>
-          
+
           <CollapsibleContent>
             <div className="text-destructive bg-destructive/10 rounded-md p-3 border border-destructive text-sm">
               {errorMessage}
