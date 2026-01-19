@@ -27,6 +27,11 @@ export interface InterfaceConfig {
   language: string;
   direction?: 'ltr' | 'rtl' | 'auto';
   /**
+   * Simple access code for authentication (e.g., "8284")
+   * If set, users enter this code instead of the full auth token
+   */
+  accessCode?: string;
+  /**
    * VS Code Web URL base (e.g., http://10.10.10.103:9999)
    * Will be used as: {vscodeWebUrl}/?folder={projectPath}
    */
@@ -49,7 +54,7 @@ export interface CUIConfig {
    * Example: "wenbomacbook-a1b2c3d4e5f6g7h8"
    */
   machine_id: string;
-  
+
   /**
    * Server configuration
    */

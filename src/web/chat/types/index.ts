@@ -119,6 +119,7 @@ export interface Preferences {
   colorScheme: 'light' | 'dark' | 'system';
   language: string;
   direction?: 'ltr' | 'rtl' | 'auto';
+  accessCode?: string;
   vscodeWebUrl?: string;
   notifications?: {
     enabled: boolean;

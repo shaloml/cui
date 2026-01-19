@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, Bell, Shield, Mic, X, Cpu } from 'lucide-react';
+import { Settings, Bell, Shield, Mic, X, Cpu, Copy, Check } from 'lucide-react';
 import { api } from '../../services/api';
 import type { Preferences, GeminiHealthResponse } from '../../types';
 import type { CUIConfig } from '../../../../types/config';
@@ -29,6 +29,7 @@ export function PreferencesModal({ onClose }: Props) {
   const [geminiHealthLoading, setGeminiHealthLoading] = useState(false);
   const [fullConfig, setFullConfig] = useState<CUIConfig | null>(null);
   const [activeTab, setActiveTab] = useState<string>('general');
+  const [copiedToken, setCopiedToken] = useState(false);
 
   useEffect(() => {
     api.getConfig().then(cfg => setPrefs(cfg.interface)).catch(() => { });
@@ -93,6 +94,14 @@ export function PreferencesModal({ onClose }: Props) {
       setFullConfig(updatedConfig);
     } catch (error) {
       console.error('Failed to update config:', error);
+    }
+  };
+
+  const handleCopyToken = async () => {
+    if (fullConfig?.authToken) {
+      await navigator.clipboard.writeText(fullConfig.authToken);
+      setCopiedToken(true);
+      setTimeout(() => setCopiedToken(false), 2000);
     }
   };
 
@@ -256,6 +265,48 @@ export function PreferencesModal({ onClose }: Props) {
                     className="w-[280px] h-9 bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700"
                     aria-label="VS Code Web URL"
                   />
+                </div>
+                <div className="flex items-center justify-between min-h-[60px] py-2">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="access-code" className="text-sm text-neutral-900 dark:text-neutral-100 font-normal">
+                      Access Code
+                    </Label>
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                      Simple code for login (e.g., 8284)
+                    </span>
+                  </div>
+                  <Input
+                    id="access-code"
+                    value={prefs.accessCode || ''}
+                    onChange={(e) => update({ accessCode: e.target.value || undefined })}
+                    placeholder="8284"
+                    className="w-[120px] h-9 bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700 text-center font-mono"
+                    aria-label="Access code"
+                  />
+                </div>
+                <div className="flex items-center justify-between min-h-[60px] py-2">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="auth-token" className="text-sm text-neutral-900 dark:text-neutral-100 font-normal">
+                      Auth Token
+                    </Label>
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                      Token for accessing CUI server
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="px-3 py-1.5 bg-neutral-100 dark:bg-neutral-800 rounded text-sm font-mono text-neutral-700 dark:text-neutral-300 select-all">
+                      {fullConfig?.authToken || '...'}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleCopyToken}
+                      className="h-8 w-8"
+                      aria-label="Copy auth token"
+                    >
+                      {copiedToken ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
                 </div>
               </TabsContent>

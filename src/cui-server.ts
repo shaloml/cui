@@ -41,6 +41,7 @@ import { createWorkingDirectoriesRoutes } from './routes/working-directories.rou
 import { createConfigRoutes } from './routes/config.routes.js';
 import { createGeminiRoutes } from './routes/gemini.routes.js';
 import { createNotificationsRoutes } from './routes/notifications.routes.js';
+import { createAuthRoutes } from './routes/auth.routes.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { createCorsMiddleware } from './middleware/cors-setup.js';
@@ -468,8 +469,10 @@ export class CUIServer {
     this.app.use('/api/questions', createQuestionRoutes(this.questionTracker));
     // Notifications routes - before auth (needed for service worker subscription on first load)
     this.app.use('/api/notifications', createNotificationsRoutes(this.webPushService));
-    
-    // Apply auth middleware to all other API routes unless skipAuthToken is set
+    // Auth status route - before auth (needed for frontend to check if auth is required)
+    this.app.use('/api/auth', createAuthRoutes());
+
+    // Apply auth middleware to all other API routes unless skipAuthToken is set via CLI
     if (!this.configOverrides?.skipAuthToken) {
       if (this.configOverrides?.token) {
         // Use custom auth middleware with token override

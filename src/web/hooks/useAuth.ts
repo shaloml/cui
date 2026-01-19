@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const AUTH_COOKIE_NAME = 'cui-auth-token';
 
@@ -14,6 +14,67 @@ export function getAuthToken(): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Check auth configuration
+ */
+export async function checkAuthStatus(): Promise<{ useAccessCode: boolean; needsSetup: boolean }> {
+  try {
+    const response = await fetch('/api/auth/status');
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch (error) {
+    console.error('Failed to check auth status:', error);
+  }
+  return { useAccessCode: false, needsSetup: true };
+}
+
+/**
+ * Set up initial access code
+ */
+export async function setupAccessCode(code: string): Promise<{ success: boolean; token?: string; error?: string }> {
+  try {
+    const response = await fetch('/api/auth/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return { success: true, token: data.token };
+    } else {
+      const data = await response.json();
+      return { success: false, error: data.error || 'Setup failed' };
+    }
+  } catch (error) {
+    return { success: false, error: 'Connection error' };
+  }
+}
+
+/**
+ * Verify access code and get auth token
+ */
+export async function verifyAccessCode(code: string): Promise<{ success: boolean; token?: string; error?: string }> {
+  try {
+    const response = await fetch('/api/auth/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return { success: true, token: data.token };
+    } else {
+      const data = await response.json();
+      return { success: false, error: data.error || 'Invalid code' };
+    }
+  } catch (error) {
+    return { success: false, error: 'Connection error' };
+  }
 }
 
 /**
