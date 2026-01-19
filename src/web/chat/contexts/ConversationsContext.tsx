@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { api } from '../services/api';
 import { useStreamStatus } from './StreamStatusContext';
-import type { ConversationSummary, WorkingDirectory, ConversationSummaryWithLiveStatus } from '../types';
+import type { ConversationSummary, WorkingDirectory, ConversationSummaryWithLiveStatus, ProjectInfo } from '../types';
 
 interface RecentDirectory {
   lastDate: string;
@@ -22,12 +22,27 @@ interface ConversationsContextType {
   }) => Promise<void>;
   loadMoreConversations: () => Promise<void>;
   getMostRecentWorkingDirectory: () => string | null;
+  // Project selection state
+  projects: ProjectInfo[];
+  selectedProject: string | null; // null means "All Projects"
+  setSelectedProject: (path: string | null) => void;
+  pinnedProjects: string[];
+  toggleProjectPin: (path: string) => void;
+  sidebarCollapsed: boolean;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  projectSearch: string;
+  setProjectSearch: (search: string) => void;
 }
 
 const ConversationsContext = createContext<ConversationsContextType | undefined>(undefined);
 
 const INITIAL_LIMIT = 20;
 const LOAD_MORE_LIMIT = 40;
+
+// LocalStorage keys for persistence
+const PINNED_PROJECTS_KEY = 'cui-pinned-projects';
+const SIDEBAR_COLLAPSED_KEY = 'cui-sidebar-collapsed';
+const SELECTED_PROJECT_KEY = 'cui-selected-project';
 
 export function ConversationsProvider({ children }: { children: ReactNode }) {
   const [conversations, setConversations] = useState<ConversationSummaryWithLiveStatus[]>([]);
@@ -37,6 +52,22 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [recentDirectories, setRecentDirectories] = useState<Record<string, RecentDirectory>>({});
   const { subscribeToStreams, getStreamStatus, streamStatuses } = useStreamStatus();
+
+  // Project selection state
+  const [projects, setProjects] = useState<ProjectInfo[]>([]);
+  const [selectedProject, setSelectedProjectState] = useState<string | null>(() => {
+    const saved = localStorage.getItem(SELECTED_PROJECT_KEY);
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [pinnedProjects, setPinnedProjects] = useState<string[]>(() => {
+    const saved = localStorage.getItem(PINNED_PROJECTS_KEY);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => {
+    const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [projectSearch, setProjectSearch] = useState('');
 
   const loadWorkingDirectories = async (): Promise<Record<string, RecentDirectory> | null> => {
     try {
@@ -176,14 +207,55 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
 
   const getMostRecentWorkingDirectory = (): string | null => {
     if (conversations.length === 0) return null;
-    
+
     // Sort by updatedAt to get the most recently used
-    const sorted = [...conversations].sort((a, b) => 
+    const sorted = [...conversations].sort((a, b) =>
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
-    
+
     return sorted[0]?.projectPath || null;
   };
+
+  // Project management functions
+  const setSelectedProject = useCallback((path: string | null) => {
+    setSelectedProjectState(path);
+    localStorage.setItem(SELECTED_PROJECT_KEY, JSON.stringify(path));
+  }, []);
+
+  const toggleProjectPin = useCallback((path: string) => {
+    setPinnedProjects(prev => {
+      const newPinned = prev.includes(path)
+        ? prev.filter(p => p !== path)
+        : [...prev, path];
+      localStorage.setItem(PINNED_PROJECTS_KEY, JSON.stringify(newPinned));
+      return newPinned;
+    });
+  }, []);
+
+  const setSidebarCollapsed = useCallback((collapsed: boolean) => {
+    setSidebarCollapsedState(collapsed);
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, JSON.stringify(collapsed));
+  }, []);
+
+  // Compute projects from recentDirectories
+  useEffect(() => {
+    const projectList: ProjectInfo[] = Object.entries(recentDirectories).map(([path, dir]) => ({
+      path,
+      shortname: dir.shortname,
+      conversationCount: conversations.filter(c => c.projectPath === path).length,
+      lastActivity: dir.lastDate,
+      isPinned: pinnedProjects.includes(path),
+    }));
+
+    // Sort: pinned first, then by lastActivity
+    projectList.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
+    });
+
+    setProjects(projectList);
+  }, [recentDirectories, conversations, pinnedProjects]);
 
   // Effect to merge live status with conversations
   useEffect(() => {
@@ -208,17 +280,27 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
   }, [streamStatuses, getStreamStatus]);
 
   return (
-    <ConversationsContext.Provider 
-      value={{ 
-        conversations, 
-        loading, 
-        loadingMore, 
-        hasMore, 
-        error, 
+    <ConversationsContext.Provider
+      value={{
+        conversations,
+        loading,
+        loadingMore,
+        hasMore,
+        error,
         recentDirectories,
-        loadConversations, 
-        loadMoreConversations, 
-        getMostRecentWorkingDirectory 
+        loadConversations,
+        loadMoreConversations,
+        getMostRecentWorkingDirectory,
+        // Project selection
+        projects,
+        selectedProject,
+        setSelectedProject,
+        pinnedProjects,
+        toggleProjectPin,
+        sidebarCollapsed,
+        setSidebarCollapsed,
+        projectSearch,
+        setProjectSearch,
       }}
     >
       {children}

@@ -152,3 +152,12 @@ export interface StreamStatus {
 export interface ConversationSummaryWithLiveStatus extends ConversationSummary {
   liveStatus?: StreamStatus;
 }
+
+// Project information for sidebar
+export interface ProjectInfo {
+  path: string;           // Full absolute path
+  shortname: string;      // Smart folder name suffix
+  conversationCount: number;
+  lastActivity: string;   // ISO timestamp
+  isPinned?: boolean;
+}

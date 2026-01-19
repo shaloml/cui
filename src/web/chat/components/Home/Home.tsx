@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useConversations } from '../../contexts/ConversationsContext';
 import { api } from '../../services/api';
-import { Header } from './Header';
 import { Composer, ComposerRef } from '@/web/chat/components/Composer';
 import { TaskTabs } from './TaskTabs';
 import { TaskList } from './TaskList';
@@ -10,16 +9,17 @@ import type { FileAttachment } from '../../types';
 
 export function Home() {
   const navigate = useNavigate();
-  const { 
-    conversations, 
-    loading, 
-    loadingMore, 
-    hasMore, 
-    error, 
-    loadConversations, 
+  const {
+    conversations,
+    loading,
+    loadingMore,
+    hasMore,
+    error,
+    loadConversations,
     loadMoreConversations,
     recentDirectories,
-    getMostRecentWorkingDirectory 
+    getMostRecentWorkingDirectory,
+    selectedProject,
   } = useConversations();
   const [activeTab, setActiveTab] = useState<'tasks' | 'history' | 'archive'>('tasks');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,10 +93,20 @@ export function Home() {
     };
   }, [loadConversations, activeTab]);
 
-  // Get the most recent working directory from conversations
-  const recentWorkingDirectory = conversations.length > 0 
-    ? conversations[0].projectPath 
-    : undefined;
+  // Filter conversations by selected project
+  const filteredConversations = useMemo(() => {
+    if (!selectedProject) {
+      return conversations;
+    }
+    return conversations.filter(conv => conv.projectPath === selectedProject);
+  }, [conversations, selectedProject]);
+
+  // Get the working directory (use selected project or most recent)
+  const recentWorkingDirectory = selectedProject
+    ? selectedProject
+    : conversations.length > 0
+      ? conversations[0].projectPath
+      : undefined;
 
   const handleComposerSubmit = async (text: string, workingDirectory?: string, model?: string, permissionMode?: string, attachments?: FileAttachment[]) => {
     if (!workingDirectory) return;
@@ -122,14 +132,26 @@ export function Home() {
     }
   };
 
+  // Get the display name for the selected project
+  const selectedProjectName = selectedProject
+    ? recentDirectories[selectedProject]?.shortname || selectedProject.split('/').pop() || selectedProject
+    : null;
+
   return (
     <div className="flex flex-col h-screen w-full bg-background">
-      <Header />
-
       <main className="relative flex flex-1 w-full h-full overflow-hidden transition-all duration-[250ms] z-[1]">
         <div className="flex flex-col h-full w-full">
-          <div className="z-0 mx-auto flex flex-col w-full max-w-3xl h-full">
+          <div className="z-0 mx-auto flex flex-col w-full max-w-3xl h-full px-4">
             <div className="sticky top-0 z-50 flex flex-col items-center bg-background">
+              {/* Breadcrumb for selected project */}
+              {selectedProject && (
+                <div className="w-full pt-2 pb-1">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{selectedProjectName}</span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center gap-3 mb-4 pt-4">
                 <div className="flex items-center">
                   <div className="w-[27px] h-[27px] flex items-center justify-center">
@@ -192,11 +214,11 @@ export function Home() {
               />
             </div>
 
-            <TaskList 
-              conversations={conversations}
+            <TaskList
+              conversations={filteredConversations}
               loading={loading}
               loadingMore={loadingMore}
-              hasMore={hasMore}
+              hasMore={hasMore && !selectedProject}
               error={error}
               activeTab={activeTab}
               onLoadMore={(filters) => loadMoreConversations(filters)}
