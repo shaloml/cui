@@ -237,7 +237,7 @@ export function Sidebar({ onNewProject }: SidebarProps) {
       {showPrefs && <PreferencesModal onClose={() => setShowPrefs(false)} />}
       {showWorkspaceBrowser && (
         <WorkspaceBrowserModal
-          isOpen={showWorkspaceBrowser}
+          open={showWorkspaceBrowser}
           onClose={() => setShowWorkspaceBrowser(false)}
           onSelect={handleWorkspaceSelect}
           recentDirectories={recentDirectories}

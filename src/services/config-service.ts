@@ -140,6 +140,16 @@ export class ConfigService {
 
       // Merge with defaults for missing sections while preserving all existing fields (e.g., router)
       let updated = false;
+
+      // Deep-merge interface config
+      const mergedInterface = { ...DEFAULT_CONFIG.interface, ...(fileConfig.interface || {}) };
+
+      // Apply environment variable for access code if not set in config
+      if (!mergedInterface.accessCode && process.env.CUI_ACCESS_CODE) {
+        mergedInterface.accessCode = process.env.CUI_ACCESS_CODE;
+        this.logger.debug('Access code set from CUI_ACCESS_CODE environment variable');
+      }
+
       const merged: CUIConfig = {
         // Start with defaults
         ...DEFAULT_CONFIG,
@@ -150,7 +160,7 @@ export class ConfigService {
         authToken: fileConfig.authToken || crypto.randomBytes(16).toString('hex'),
         // Deep-merge known nested sections to ensure defaults are filled without dropping user values
         server: { ...DEFAULT_CONFIG.server, ...(fileConfig.server || {}) },
-        interface: { ...DEFAULT_CONFIG.interface, ...(fileConfig.interface || {}) }
+        interface: mergedInterface
       };
 
       // Determine if we added any defaults and need to persist back to disk

@@ -60,13 +60,13 @@ export default function Login({ onLogin, mode }: LoginProps) {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex gap-2 items-center">
             <Input
-              type="text"
+              type="password"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               className="flex-1 h-11 px-4 rounded-3xl bg-neutral-50 dark:bg-neutral-700 border-neutral-200 dark:border-neutral-600 text-neutral-900 dark:text-neutral-100 font-mono text-center text-2xl tracking-[0.3em] transition-all focus:bg-white dark:focus:bg-neutral-900 focus:border-neutral-400 dark:focus:border-neutral-500"
               autoFocus
               spellCheck={false}
-              autoComplete="off"
+              autoComplete="current-password"
               placeholder="••••"
               aria-label={isSetup ? 'Create access code' : 'Enter access code'}
               disabled={isLoading}
