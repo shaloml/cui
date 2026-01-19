@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { FolderPlus, PanelLeftClose, PanelLeft, Settings, Search, X } from 'lucide-react';
 import { ProjectList } from './ProjectList';
 import { useConversations } from '../../contexts/ConversationsContext';
+import { usePreferencesContext } from '../../contexts/PreferencesContext';
 import { PreferencesModal } from '../PreferencesModal/PreferencesModal';
 import { WorkspaceBrowserModal } from '../Composer/WorkspaceBrowserModal';
+import { ProjectSettingsDialog } from '../ProjectSettingsDialog/ProjectSettingsDialog';
 import { Button } from '@/web/chat/components/ui/button';
 import { Input } from '@/web/chat/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/web/chat/components/ui/tooltip';
 import { cn } from '@/web/chat/lib/utils';
+import type { ProjectInfo } from '../../types';
 
 const SIDEBAR_WIDTH = 240;
 const SIDEBAR_COLLAPSED_WIDTH = 52;
@@ -27,10 +30,44 @@ export function Sidebar({ onNewProject }: SidebarProps) {
     projectSearch,
     setProjectSearch,
     recentDirectories,
+    updateProjectSettings,
   } = useConversations();
+
+  const { preferences } = usePreferencesContext();
+  const vscodeWebUrl = preferences?.vscodeWebUrl;
 
   const [showPrefs, setShowPrefs] = useState(false);
   const [showWorkspaceBrowser, setShowWorkspaceBrowser] = useState(false);
+  const [projectToEdit, setProjectToEdit] = useState<ProjectInfo | null>(null);
+
+  // Handler to open Review tab
+  const handleOpenReview = useCallback((project: ProjectInfo) => {
+    if (!project.devServerUrl) return;
+    // Open review page with the dev server URL
+    const reviewUrl = `/review?url=${encodeURIComponent(project.devServerUrl)}&project=${encodeURIComponent(project.path)}`;
+    window.open(reviewUrl, `review-${project.shortname}`);
+  }, []);
+
+  // Handler to open VS Code Web
+  const handleOpenVSCode = useCallback((project: ProjectInfo) => {
+    if (!vscodeWebUrl) return;
+    // Construct VS Code Web URL with project folder
+    const vsCodeUrl = `${vscodeWebUrl}/?folder=${encodeURIComponent(project.path)}`;
+    window.open(vsCodeUrl, `vscode-${project.shortname}`);
+  }, [vscodeWebUrl]);
+
+  // Handler to open project settings dialog
+  const handleConfigureProject = useCallback((project: ProjectInfo) => {
+    setProjectToEdit(project);
+  }, []);
+
+  // Handler to save project settings
+  const handleSaveProjectSettings = useCallback((devServerUrl: string) => {
+    if (projectToEdit) {
+      updateProjectSettings(projectToEdit.path, { devServerUrl: devServerUrl || undefined });
+    }
+    setProjectToEdit(null);
+  }, [projectToEdit, updateProjectSettings]);
 
   const handleNewProject = () => {
     setShowWorkspaceBrowser(true);
@@ -159,6 +196,10 @@ export function Sidebar({ onNewProject }: SidebarProps) {
             selectedProject={selectedProject}
             onSelectProject={setSelectedProject}
             onTogglePin={toggleProjectPin}
+            onOpenReview={handleOpenReview}
+            onOpenVSCode={handleOpenVSCode}
+            onConfigureProject={handleConfigureProject}
+            vscodeWebUrl={vscodeWebUrl}
             searchFilter={projectSearch}
             collapsed={sidebarCollapsed}
           />
@@ -200,6 +241,13 @@ export function Sidebar({ onNewProject }: SidebarProps) {
           onClose={() => setShowWorkspaceBrowser(false)}
           onSelect={handleWorkspaceSelect}
           recentDirectories={recentDirectories}
+        />
+      )}
+      {projectToEdit && (
+        <ProjectSettingsDialog
+          project={projectToEdit}
+          onClose={() => setProjectToEdit(null)}
+          onSave={handleSaveProjectSettings}
         />
       )}
     </>

@@ -1,7 +1,11 @@
 import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
 import { useMultipleStreams } from '../hooks/useMultipleStreams';
 import { mapStreamEventToStatus } from '../utils/streamEventMapper';
+import { notifyFileChange } from '../utils/reviewChannel';
 import type { StreamEvent, StreamStatus } from '../types';
+
+// Tools that modify files
+const FILE_CHANGE_TOOLS = ['Edit', 'MultiEdit', 'Write', 'NotebookEdit'];
 
 interface StreamStatusContextType {
   streamStatuses: Map<string, StreamStatus>;
@@ -9,6 +13,8 @@ interface StreamStatusContextType {
   unsubscribeFromStream: (streamingId: string) => void;
   getStreamStatus: (streamingId: string) => StreamStatus | undefined;
   activeStreamCount: number;
+  // Register project path for a stream to enable file change notifications
+  registerStreamProject: (streamingId: string, projectPath: string) => void;
 }
 
 const StreamStatusContext = createContext<StreamStatusContextType | undefined>(undefined);
@@ -17,6 +23,8 @@ export function StreamStatusProvider({ children }: { children: ReactNode }) {
   const [streamStatuses, setStreamStatuses] = useState<Map<string, StreamStatus>>(new Map());
   const [subscribedStreamIds, setSubscribedStreamIds] = useState<string[]>([]);
   const streamStatusesRef = useRef<Map<string, StreamStatus>>(new Map());
+  // Map streaming IDs to project paths for file change notifications
+  const streamProjectsRef = useRef<Map<string, string>>(new Map());
 
   // Handle stream messages
   const handleStreamMessage = useCallback((streamingId: string, event: StreamEvent) => {
@@ -27,7 +35,7 @@ export function StreamStatusProvider({ children }: { children: ReactNode }) {
 
     // Use the streamEventMapper utility to map event to status
     const statusUpdates = mapStreamEventToStatus(event, currentStatus);
-    
+
     // Merge with current status
     const updatedStatus: StreamStatus = {
       ...currentStatus,
@@ -36,6 +44,23 @@ export function StreamStatusProvider({ children }: { children: ReactNode }) {
 
     streamStatusesRef.current.set(streamingId, updatedStatus);
     setStreamStatuses(new Map(streamStatusesRef.current));
+
+    // Detect file changes and notify review tabs
+    if (event.type === 'assistant' && event.message.content && Array.isArray(event.message.content)) {
+      const hasFileChange = event.message.content.some(item => {
+        if (typeof item === 'object' && 'type' in item && item.type === 'tool_use' && 'name' in item) {
+          return FILE_CHANGE_TOOLS.includes(item.name as string);
+        }
+        return false;
+      });
+
+      if (hasFileChange) {
+        const projectPath = streamProjectsRef.current.get(streamingId);
+        if (projectPath) {
+          notifyFileChange(projectPath);
+        }
+      }
+    }
   }, []);
 
   // Handle stream errors
@@ -123,10 +148,16 @@ export function StreamStatusProvider({ children }: { children: ReactNode }) {
   // Unsubscribe from a stream
   const unsubscribeFromStream = useCallback((streamingId: string) => {
     setSubscribedStreamIds(current => current.filter(id => id !== streamingId));
-    
-    // Remove status
+
+    // Remove status and project mapping
     streamStatusesRef.current.delete(streamingId);
+    streamProjectsRef.current.delete(streamingId);
     setStreamStatuses(new Map(streamStatusesRef.current));
+  }, []);
+
+  // Register a project path for a stream
+  const registerStreamProject = useCallback((streamingId: string, projectPath: string) => {
+    streamProjectsRef.current.set(streamingId, projectPath);
   }, []);
 
   // Get stream status
@@ -142,6 +173,7 @@ export function StreamStatusProvider({ children }: { children: ReactNode }) {
         unsubscribeFromStream,
         getStreamStatus,
         activeStreamCount: activeConnectionCount,
+        registerStreamProject,
       }}
     >
       {children}

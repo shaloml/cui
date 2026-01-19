@@ -9,6 +9,10 @@ interface ProjectListProps {
   selectedProject: string | null;
   onSelectProject: (path: string | null) => void;
   onTogglePin: (path: string) => void;
+  onOpenReview?: (project: ProjectInfo) => void;
+  onOpenVSCode?: (project: ProjectInfo) => void;
+  onConfigureProject?: (project: ProjectInfo) => void;
+  vscodeWebUrl?: string;
   searchFilter: string;
   collapsed?: boolean;
 }
@@ -18,6 +22,10 @@ export function ProjectList({
   selectedProject,
   onSelectProject,
   onTogglePin,
+  onOpenReview,
+  onOpenVSCode,
+  onConfigureProject,
+  vscodeWebUrl,
   searchFilter,
   collapsed = false,
 }: ProjectListProps) {
@@ -59,6 +67,10 @@ export function ProjectList({
             isSelected={selectedProject === project.path}
             onClick={() => onSelectProject(project.path)}
             onTogglePin={() => onTogglePin(project.path)}
+            onOpenReview={() => onOpenReview?.(project)}
+            onOpenVSCode={() => onOpenVSCode?.(project)}
+            onConfigureProject={() => onConfigureProject?.(project)}
+            vscodeWebUrl={vscodeWebUrl}
             collapsed
           />
         ))}
@@ -96,6 +108,10 @@ export function ProjectList({
               isSelected={selectedProject === project.path}
               onClick={() => onSelectProject(project.path)}
               onTogglePin={() => onTogglePin(project.path)}
+              onOpenReview={() => onOpenReview?.(project)}
+              onOpenVSCode={() => onOpenVSCode?.(project)}
+              onConfigureProject={() => onConfigureProject?.(project)}
+              vscodeWebUrl={vscodeWebUrl}
             />
           ))}
         </>
@@ -114,6 +130,10 @@ export function ProjectList({
               isSelected={selectedProject === project.path}
               onClick={() => onSelectProject(project.path)}
               onTogglePin={() => onTogglePin(project.path)}
+              onOpenReview={() => onOpenReview?.(project)}
+              onOpenVSCode={() => onOpenVSCode?.(project)}
+              onConfigureProject={() => onConfigureProject?.(project)}
+              vscodeWebUrl={vscodeWebUrl}
             />
           ))}
         </>

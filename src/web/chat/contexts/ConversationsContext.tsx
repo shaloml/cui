@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { api } from '../services/api';
 import { useStreamStatus } from './StreamStatusContext';
-import type { ConversationSummary, WorkingDirectory, ConversationSummaryWithLiveStatus, ProjectInfo } from '../types';
+import type { ConversationSummary, WorkingDirectory, ConversationSummaryWithLiveStatus, ProjectInfo, ProjectSettings } from '../types';
 
 interface RecentDirectory {
   lastDate: string;
@@ -32,6 +32,9 @@ interface ConversationsContextType {
   setSidebarCollapsed: (collapsed: boolean) => void;
   projectSearch: string;
   setProjectSearch: (search: string) => void;
+  // Project settings (dev server URLs, etc.)
+  projectSettings: ProjectSettings;
+  updateProjectSettings: (path: string, settings: Partial<ProjectSettings[string]>) => void;
 }
 
 const ConversationsContext = createContext<ConversationsContextType | undefined>(undefined);
@@ -43,6 +46,7 @@ const LOAD_MORE_LIMIT = 40;
 const PINNED_PROJECTS_KEY = 'cui-pinned-projects';
 const SIDEBAR_COLLAPSED_KEY = 'cui-sidebar-collapsed';
 const SELECTED_PROJECT_KEY = 'cui-selected-project';
+const PROJECT_SETTINGS_KEY = 'cui-project-settings';
 
 export function ConversationsProvider({ children }: { children: ReactNode }) {
   const [conversations, setConversations] = useState<ConversationSummaryWithLiveStatus[]>([]);
@@ -51,7 +55,7 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recentDirectories, setRecentDirectories] = useState<Record<string, RecentDirectory>>({});
-  const { subscribeToStreams, getStreamStatus, streamStatuses } = useStreamStatus();
+  const { subscribeToStreams, getStreamStatus, streamStatuses, registerStreamProject } = useStreamStatus();
 
   // Project selection state
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
@@ -68,6 +72,10 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : false;
   });
   const [projectSearch, setProjectSearch] = useState('');
+  const [projectSettings, setProjectSettings] = useState<ProjectSettings>(() => {
+    const saved = localStorage.getItem(PROJECT_SETTINGS_KEY);
+    return saved ? JSON.parse(saved) : {};
+  });
 
   const loadWorkingDirectories = async (): Promise<Record<string, RecentDirectory> | null> => {
     try {
@@ -142,12 +150,19 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
       setHasMore(data.conversations.length === loadLimit);
       
       // Subscribe to streams for ongoing conversations
-      const ongoingStreamIds = data.conversations
-        .filter(conv => conv.status === 'ongoing' && conv.streamingId)
-        .map(conv => conv.streamingId as string);
-      
-      if (ongoingStreamIds.length > 0) {
+      const ongoingConversations = data.conversations
+        .filter(conv => conv.status === 'ongoing' && conv.streamingId);
+
+      if (ongoingConversations.length > 0) {
+        const ongoingStreamIds = ongoingConversations.map(conv => conv.streamingId as string);
         subscribeToStreams(ongoingStreamIds);
+
+        // Register project paths for file change notifications
+        ongoingConversations.forEach(conv => {
+          if (conv.streamingId && conv.projectPath) {
+            registerStreamProject(conv.streamingId, conv.projectPath);
+          }
+        });
       }
     } catch (err) {
       setError('Failed to load conversations');
@@ -189,12 +204,19 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
         setHasMore(data.conversations.length === LOAD_MORE_LIMIT);
         
         // Subscribe to streams for any new ongoing conversations
-        const newOngoingStreamIds = data.conversations
-          .filter(conv => conv.status === 'ongoing' && conv.streamingId)
-          .map(conv => conv.streamingId as string);
-        
-        if (newOngoingStreamIds.length > 0) {
+        const newOngoingConversations = data.conversations
+          .filter(conv => conv.status === 'ongoing' && conv.streamingId);
+
+        if (newOngoingConversations.length > 0) {
+          const newOngoingStreamIds = newOngoingConversations.map(conv => conv.streamingId as string);
           subscribeToStreams(newOngoingStreamIds);
+
+          // Register project paths for file change notifications
+          newOngoingConversations.forEach(conv => {
+            if (conv.streamingId && conv.projectPath) {
+              registerStreamProject(conv.streamingId, conv.projectPath);
+            }
+          });
         }
       }
     } catch (err) {
@@ -237,6 +259,20 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, JSON.stringify(collapsed));
   }, []);
 
+  const updateProjectSettings = useCallback((path: string, settings: Partial<ProjectSettings[string]>) => {
+    setProjectSettings(prev => {
+      const newSettings = {
+        ...prev,
+        [path]: {
+          ...prev[path],
+          ...settings,
+        },
+      };
+      localStorage.setItem(PROJECT_SETTINGS_KEY, JSON.stringify(newSettings));
+      return newSettings;
+    });
+  }, []);
+
   // Compute projects from recentDirectories
   useEffect(() => {
     const projectList: ProjectInfo[] = Object.entries(recentDirectories).map(([path, dir]) => ({
@@ -245,6 +281,7 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
       conversationCount: conversations.filter(c => c.projectPath === path).length,
       lastActivity: dir.lastDate,
       isPinned: pinnedProjects.includes(path),
+      devServerUrl: projectSettings[path]?.devServerUrl,
     }));
 
     // Sort: pinned first, then by lastActivity
@@ -255,7 +292,7 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
     });
 
     setProjects(projectList);
-  }, [recentDirectories, conversations, pinnedProjects]);
+  }, [recentDirectories, conversations, pinnedProjects, projectSettings]);
 
   // Effect to merge live status with conversations
   useEffect(() => {
@@ -301,6 +338,9 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
         setSidebarCollapsed,
         projectSearch,
         setProjectSearch,
+        // Project settings
+        projectSettings,
+        updateProjectSettings,
       }}
     >
       {children}

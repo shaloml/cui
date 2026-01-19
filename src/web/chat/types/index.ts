@@ -160,4 +160,12 @@ export interface ProjectInfo {
   conversationCount: number;
   lastActivity: string;   // ISO timestamp
   isPinned?: boolean;
+  devServerUrl?: string;  // Dev server URL for Review feature (e.g., "http://localhost:3000")
+}
+
+// Project-specific settings stored in localStorage
+export interface ProjectSettings {
+  [projectPath: string]: {
+    devServerUrl?: string;
+  };
 }

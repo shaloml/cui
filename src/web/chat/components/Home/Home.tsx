@@ -1,11 +1,16 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Globe, Code, Settings } from 'lucide-react';
 import { useConversations } from '../../contexts/ConversationsContext';
+import { usePreferencesContext } from '../../contexts/PreferencesContext';
 import { api } from '../../services/api';
 import { Composer, ComposerRef } from '@/web/chat/components/Composer';
 import { TaskTabs } from './TaskTabs';
 import { TaskList } from './TaskList';
-import type { FileAttachment } from '../../types';
+import { ProjectSettingsDialog } from '../ProjectSettingsDialog/ProjectSettingsDialog';
+import { Button } from '../ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import type { FileAttachment, ProjectInfo } from '../../types';
 
 export function Home() {
   const navigate = useNavigate();
@@ -20,11 +25,45 @@ export function Home() {
     recentDirectories,
     getMostRecentWorkingDirectory,
     selectedProject,
+    projects,
+    updateProjectSettings,
   } = useConversations();
+  const { preferences } = usePreferencesContext();
+  const vscodeWebUrl = preferences?.vscodeWebUrl;
+
   const [activeTab, setActiveTab] = useState<'tasks' | 'history' | 'archive'>('tasks');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showProjectSettings, setShowProjectSettings] = useState(false);
   const conversationCountRef = useRef(conversations.length);
   const composerRef = useRef<ComposerRef>(null);
+
+  // Get the selected project info
+  const selectedProjectInfo = useMemo(() => {
+    if (!selectedProject) return null;
+    return projects.find(p => p.path === selectedProject) || null;
+  }, [selectedProject, projects]);
+
+  // Handler to open Review tab
+  const handleOpenReview = useCallback(() => {
+    if (!selectedProjectInfo?.devServerUrl) return;
+    const reviewUrl = `/review?url=${encodeURIComponent(selectedProjectInfo.devServerUrl)}&project=${encodeURIComponent(selectedProjectInfo.path)}`;
+    window.open(reviewUrl, `review-${selectedProjectInfo.shortname}`);
+  }, [selectedProjectInfo]);
+
+  // Handler to open VS Code Web
+  const handleOpenVSCode = useCallback(() => {
+    if (!vscodeWebUrl || !selectedProjectInfo) return;
+    const vsCodeUrl = `${vscodeWebUrl}/?folder=${encodeURIComponent(selectedProjectInfo.path)}`;
+    window.open(vsCodeUrl, `vscode-${selectedProjectInfo.shortname}`);
+  }, [vscodeWebUrl, selectedProjectInfo]);
+
+  // Handler to save project settings
+  const handleSaveProjectSettings = useCallback((devServerUrl: string) => {
+    if (selectedProjectInfo) {
+      updateProjectSettings(selectedProjectInfo.path, { devServerUrl: devServerUrl || undefined });
+    }
+    setShowProjectSettings(false);
+  }, [selectedProjectInfo, updateProjectSettings]);
 
   // Update the ref whenever conversations change
   useEffect(() => {
@@ -143,11 +182,71 @@ export function Home() {
         <div className="flex flex-col h-full w-full">
           <div className="z-0 mx-auto flex flex-col w-full max-w-3xl h-full px-4">
             <div className="sticky top-0 z-50 flex flex-col items-center bg-background">
-              {/* Breadcrumb for selected project */}
-              {selectedProject && (
+              {/* Breadcrumb for selected project with action buttons */}
+              {selectedProject && selectedProjectInfo && (
                 <div className="w-full pt-2 pb-1">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center justify-between gap-2 text-sm">
                     <span className="font-medium text-foreground">{selectedProjectName}</span>
+                    <div className="flex items-center gap-1">
+                      <TooltipProvider delayDuration={300}>
+                        {/* Review button - only show if devServerUrl is configured */}
+                        {selectedProjectInfo.devServerUrl && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 gap-1.5 text-xs"
+                                onClick={handleOpenReview}
+                              >
+                                <Globe size={14} />
+                                Review
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Open dev server in Review tab</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+
+                        {/* VS Code button - only show if vscodeWebUrl is configured */}
+                        {vscodeWebUrl && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 gap-1.5 text-xs"
+                                onClick={handleOpenVSCode}
+                              >
+                                <Code size={14} />
+                                VS Code
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Open in VS Code Web</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+
+                        {/* Settings button */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => setShowProjectSettings(true)}
+                            >
+                              <Settings size={14} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Project settings</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
                   </div>
                 </div>
               )}
@@ -226,6 +325,15 @@ export function Home() {
           </div>
         </div>
       </main>
+
+      {/* Project Settings Dialog */}
+      {showProjectSettings && selectedProjectInfo && (
+        <ProjectSettingsDialog
+          project={selectedProjectInfo}
+          onClose={() => setShowProjectSettings(false)}
+          onSave={handleSaveProjectSettings}
+        />
+      )}
     </div>
   );
 }

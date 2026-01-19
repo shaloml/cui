@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout/Layout';
 import { Home } from './components/Home/Home';
 import { ConversationView } from './components/ConversationView/ConversationView';
+import { ReviewPage } from './components/Review/ReviewPage';
 import { ConversationsProvider } from './contexts/ConversationsContext';
 import { StreamStatusProvider } from './contexts/StreamStatusContext';
 import { PreferencesProvider } from './contexts/PreferencesContext';
@@ -24,6 +25,8 @@ function ChatApp() {
                 <ConversationView />
               </Layout>
             } />
+            {/* Review page - standalone, opens in new tab */}
+            <Route path="/review" element={<ReviewPage />} />
           </Routes>
         </ConversationsProvider>
       </StreamStatusProvider>
