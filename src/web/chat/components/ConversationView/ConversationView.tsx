@@ -5,7 +5,7 @@ import { Composer, ComposerRef } from '@/web/chat/components/Composer';
 import { ConversationHeader } from '../ConversationHeader/ConversationHeader';
 import { api } from '../../services/api';
 import { useStreaming, useConversationMessages } from '../../hooks';
-import type { ChatMessage, ConversationDetailsResponse, ConversationMessage, ConversationSummary, FileAttachment } from '../../types';
+import type { ChatMessage, ConversationDetailsResponse, ConversationMessage, ConversationSummary, FileAttachment, PermissionMode } from '../../types';
 
 export function ConversationView() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -19,6 +19,7 @@ export function ConversationView() {
   const [isQuestionAnswerLoading, setIsQuestionAnswerLoading] = useState(false);
   const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
   const [currentWorkingDirectory, setCurrentWorkingDirectory] = useState<string>('');
+  const [currentPermissionMode, setCurrentPermissionMode] = useState<PermissionMode>('default');
   const composerRef = useRef<ComposerRef>(null);
 
   // Use shared conversation messages hook
@@ -207,17 +208,52 @@ export function ConversationView() {
     try {
       // Call the API to stop the conversation
       await api.stopConversation(streamingId);
-      
+
       // Disconnect the streaming connection
       disconnect();
-      
+
       // Clear the streaming ID
       setStreamingId(null);
-      
+
       // Streaming has stopped
     } catch (err: any) {
       console.error('Failed to stop conversation:', err);
       setError(err.message || 'Failed to stop conversation');
+    }
+  };
+
+  const handlePermissionModeChange = async (newMode: PermissionMode) => {
+    if (!sessionId) return;
+
+    setError(null);
+
+    try {
+      // Stop the current conversation if it's running
+      if (streamingId) {
+        await api.stopConversation(streamingId);
+        disconnect();
+        setStreamingId(null);
+      }
+
+      // Resume the conversation with the new permission mode
+      // We use an empty prompt to indicate this is just a mode change/continuation
+      const response = await api.startConversation({
+        resumedSessionId: sessionId,
+        initialPrompt: '', // Empty prompt just resumes the conversation
+        workingDirectory: currentWorkingDirectory || conversationSummary?.projectPath,
+        permissionMode: newMode === 'default' ? undefined : newMode,
+      });
+
+      // Update the local permission mode
+      setCurrentPermissionMode(newMode);
+
+      // Navigate to the new session (it might be the same session or a new continuation)
+      if (response.sessionId !== sessionId) {
+        navigate(`/c/${response.sessionId}`);
+      }
+    } catch (err: any) {
+      console.error('Failed to change permission mode:', err);
+      setError(err.message || 'Failed to change permission mode');
     }
   };
 
@@ -255,11 +291,14 @@ export function ConversationView() {
 
   return (
     <div className="h-full flex flex-col bg-background relative" role="main" aria-label="Conversation view">
-      <ConversationHeader 
+      <ConversationHeader
         title={conversationSummary?.sessionInfo.custom_name || conversationTitle}
         sessionId={sessionId}
         isArchived={conversationSummary?.sessionInfo.archived || false}
         isPinned={conversationSummary?.sessionInfo.pinned || false}
+        permissionMode={currentPermissionMode}
+        isStreaming={!!streamingId}
+        onPermissionModeChange={handlePermissionModeChange}
         subtitle={conversationSummary ? {
           date: new Date(conversationSummary.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           repo: conversationSummary.projectPath.split('/').pop() || 'project',

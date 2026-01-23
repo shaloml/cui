@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { ChevronDown, Mic, Send, Loader2, Sparkles, Laptop, Square, Check, X, MicOff, Zap, Bot, Drone, Code2, Gauge, Rocket, FileText, Paperclip, FolderOpen } from 'lucide-react';
+import { ChevronDown, Mic, Send, Loader2, Sparkles, Laptop, Square, Check, X, MicOff, Zap, Bot, Drone, Code2, Gauge, Rocket, FileText, Paperclip, FolderOpen, ArrowUp } from 'lucide-react';
 import { DropdownSelector, DropdownOption } from '../DropdownSelector';
 import { PermissionDialog } from '../PermissionDialog';
 import { QuestionDialog } from '../QuestionDialog';
@@ -9,7 +9,7 @@ import { WorkspaceBrowserModal } from './WorkspaceBrowserModal';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import type { PermissionRequest, AskUserQuestionRequest, Command, PendingFile, FileAttachment } from '../../types';
+import type { PermissionRequest, AskUserQuestionRequest, Command, PendingFile, FileAttachment, PermissionMode } from '../../types';
 import { ALLOWED_FILE_TYPES, MAX_FILE_SIZE, MAX_ATTACHMENTS } from '@/types';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
@@ -46,6 +46,9 @@ export interface ComposerProps {
   enableFileAutocomplete?: boolean;
   showPermissionUI?: boolean;
   showStopButton?: boolean;
+
+  // Default permission mode from preferences
+  defaultPermissionMode?: PermissionMode;
 
   // Directory selection
   workingDirectory?: string;
@@ -344,6 +347,7 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
   enableFileAutocomplete = false,
   showPermissionUI = false,
   showStopButton = false,
+  defaultPermissionMode,
   workingDirectory = '',
   onDirectoryChange,
   recentDirectories = {},
@@ -379,7 +383,10 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
 
   const [selectedDirectory, setSelectedDirectory] = useState(workingDirectory || 'Select directory');
   const [selectedModel, setSelectedModel] = useState(model);
-  const [selectedPermissionMode, setSelectedPermissionMode] = useState<string>(cachedState.selectedPermissionMode);
+  // Initialize permission mode: prefer prop (from preferences) > cached state > 'default'
+  const [selectedPermissionMode, setSelectedPermissionMode] = useState<string>(
+    defaultPermissionMode || cachedState.selectedPermissionMode || 'default'
+  );
   const [isPermissionDropdownOpen, setIsPermissionDropdownOpen] = useState(false);
   const [localFileSystemEntries, setLocalFileSystemEntries] = useState<FileSystemEntry[]>(fileSystemEntries);
   const [localCommands, setLocalCommands] = useState<Command[]>(availableCommands);
@@ -890,7 +897,8 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
           break;
       }
     } else if (e.key === 'Enter') {
-      if (e.metaKey || e.ctrlKey) {
+      // Shift+Enter for new line, Enter alone submits
+      if (!e.shiftKey) {
         e.preventDefault();
         handleSubmit(selectedPermissionMode);
       }
@@ -1224,65 +1232,78 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
               </TooltipProvider>
             ) : audioState === 'idle' && (
               <div className="flex items-center gap-2">
-                {/* Combined Permission Mode Button with Dropdown */}
-                <div className={`flex items-center rounded-full overflow-hidden ${
-                  (!value.trim() || isLoading || disabled || (showDirectorySelector && selectedDirectory === 'Select directory'))
-                    ? 'bg-foreground/5 text-foreground/50'
-                    : 'bg-foreground text-background'
-                }`}>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          className="h-8 min-w-[48px] w-[48px] px-3 py-0.5 bg-transparent text-inherit hover:bg-white/10 border-0 shadow-none"
-                          disabled={!value.trim() || isLoading || disabled || (showDirectorySelector && selectedDirectory === 'Select directory')}
-                          onClick={() => handleSubmit(selectedPermissionMode)}
-                        >
-                          {isLoading ? <Loader2 size={14} className="animate-spin" /> : getPermissionModeLabel(selectedPermissionMode)}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{getPermissionModeTitle(selectedPermissionMode)}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <DropdownSelector
-                    options={[
-                      { value: 'default', label: 'Ask', description: 'Ask before making changes' },
-                      { value: 'acceptEdits', label: 'Auto', description: 'Apply edits automatically' },
-                      { value: 'bypassPermissions', label: 'Yolo', description: 'No permission prompts' },
-                      { value: 'plan', label: 'Plan', description: 'Planning mode only' },
-                    ]}
-                    value={selectedPermissionMode}
-                    onChange={setSelectedPermissionMode}
-                    isOpen={isPermissionDropdownOpen}
-                    onOpenChange={setIsPermissionDropdownOpen}
-                    showFilterInput={false}
-                    renderOption={(option) => (
-                      <div className="flex flex-col items-start gap-0.5 w-full">
-                        <div className="flex items-center gap-2">
-                          {getPermissionModeIcon(option.value)}
-                          <span className="text-sm font-medium">{option.label}</span>
-                        </div>
-                        {option.description && (
-                          <span className="text-xs text-muted-foreground/80 ps-[22px]">{option.description}</span>
-                        )}
+                {/* Permission Mode Selector */}
+                <DropdownSelector
+                  options={[
+                    { value: 'default', label: 'Ask', description: 'Ask before making changes' },
+                    { value: 'acceptEdits', label: 'Auto', description: 'Apply edits automatically' },
+                    { value: 'bypassPermissions', label: 'Yolo', description: 'No permission prompts' },
+                    { value: 'plan', label: 'Plan', description: 'Planning mode only' },
+                  ]}
+                  value={selectedPermissionMode}
+                  onChange={setSelectedPermissionMode}
+                  isOpen={isPermissionDropdownOpen}
+                  onOpenChange={setIsPermissionDropdownOpen}
+                  showFilterInput={false}
+                  renderOption={(option) => (
+                    <div className="flex flex-col items-start gap-0.5 w-full">
+                      <div className="flex items-center gap-2">
+                        {getPermissionModeIcon(option.value)}
+                        <span className="text-sm font-medium">{option.label}</span>
                       </div>
-                    )}
-                    renderTrigger={({ onClick }) => (
+                      {option.description && (
+                        <span className="text-xs text-muted-foreground/80 ps-[22px]">{option.description}</span>
+                      )}
+                    </div>
+                  )}
+                  renderTrigger={({ onClick }) => (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-muted-foreground hover:bg-muted/50 rounded-full flex items-center gap-1"
+                            onClick={onClick}
+                            aria-label="Select permission mode"
+                          >
+                            {getPermissionModeIcon(selectedPermissionMode)}
+                            <span className="text-xs">{getPermissionModeLabel(selectedPermissionMode)}</span>
+                            <ChevronDown size={12} className="opacity-50" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{getPermissionModeTitle(selectedPermissionMode)}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                />
+
+                {/* Submit Button */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
                       <Button
                         type="button"
-                        className="w-8 h-8 bg-transparent text-inherit border-l border-white/20 opacity-80 hover:opacity-100 hover:bg-white/10 border-0 shadow-none rounded-none flex items-center justify-center p-0"
-                        onClick={onClick}
+                        size="icon"
+                        className={`w-8 h-8 rounded-full ${
+                          (!value.trim() || isLoading || disabled || (showDirectorySelector && selectedDirectory === 'Select directory'))
+                            ? 'bg-foreground/10 text-foreground/50 cursor-not-allowed'
+                            : 'bg-foreground text-background hover:bg-foreground/90'
+                        }`}
                         disabled={!value.trim() || isLoading || disabled || (showDirectorySelector && selectedDirectory === 'Select directory')}
-                        aria-label="Select permission mode"
+                        onClick={() => handleSubmit(selectedPermissionMode)}
                       >
-                        <ChevronDown size={14} />
+                        {isLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowUp size={16} />}
                       </Button>
-                    )}
-                  />
-                </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Send message (Enter)</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             )}
           </div>

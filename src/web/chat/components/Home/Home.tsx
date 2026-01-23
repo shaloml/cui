@@ -269,7 +269,7 @@ export function Home() {
               </div>
               
               <div className="w-full">
-                <Composer 
+                <Composer
                   ref={composerRef}
                   workingDirectory={recentWorkingDirectory}
                   onSubmit={handleComposerSubmit}
@@ -278,6 +278,7 @@ export function Home() {
                   showDirectorySelector={true}
                   showModelSelector={true}
                   enableFileAutocomplete={true}
+                  defaultPermissionMode={preferences?.defaultPermissionMode}
                   recentDirectories={recentDirectories}
                   getMostRecentWorkingDirectory={getMostRecentWorkingDirectory}
                   onDirectoryChange={(directory) => {

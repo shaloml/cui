@@ -150,6 +150,18 @@ export class ConfigService {
         this.logger.debug('Access code set from CUI_ACCESS_CODE environment variable');
       }
 
+      // Apply environment variable for default permission mode if not set in config
+      if (!mergedInterface.defaultPermissionMode && process.env.CUI_DEFAULT_PERMISSION_MODE) {
+        const envPermissionMode = process.env.CUI_DEFAULT_PERMISSION_MODE;
+        const validModes = ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
+        if (validModes.includes(envPermissionMode)) {
+          mergedInterface.defaultPermissionMode = envPermissionMode as 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
+          this.logger.debug('Default permission mode set from CUI_DEFAULT_PERMISSION_MODE environment variable');
+        } else {
+          this.logger.warn(`Invalid CUI_DEFAULT_PERMISSION_MODE value: ${envPermissionMode}. Valid values: ${validModes.join(', ')}`);
+        }
+      }
+
       const merged: CUIConfig = {
         // Start with defaults
         ...DEFAULT_CONFIG,
@@ -322,6 +334,9 @@ export class ConfigService {
     }
     if (iface.language !== undefined && typeof iface.language !== 'string') {
       throw new Error('Invalid config: interface.language must be a string');
+    }
+    if (iface.defaultPermissionMode !== undefined && !['default', 'acceptEdits', 'bypassPermissions', 'plan'].includes(iface.defaultPermissionMode as string)) {
+      throw new Error("Invalid config: interface.defaultPermissionMode must be 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan'");
     }
     if (iface.notifications !== undefined) {
       const n = iface.notifications as InterfaceConfig['notifications'];

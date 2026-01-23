@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Archive, Check, X } from 'lucide-react';
+import { ArrowLeft, Archive, Check, X, Code2, Gauge, Rocket, FileText, ChevronDown, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { Button } from '@/web/chat/components/ui/button';
 import { Input } from '@/web/chat/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/web/chat/components/ui/tooltip';
 import { MoreOptionsMenu } from '../MoreOptionsMenu';
+import { DropdownSelector, DropdownOption } from '../DropdownSelector';
+import { Dialog } from '../Dialog';
+import type { PermissionMode } from '../../types';
 
 interface ConversationHeaderProps {
   title: string;
@@ -23,13 +26,68 @@ interface ConversationHeaderProps {
   };
   onTitleUpdate?: (newTitle: string) => void;
   onPinToggle?: (isPinned: boolean) => void;
+  // Permission mode props
+  permissionMode?: PermissionMode;
+  isStreaming?: boolean;
+  onPermissionModeChange?: (mode: PermissionMode) => Promise<void>;
 }
 
-export function ConversationHeader({ title, sessionId, isArchived = false, isPinned = false, subtitle, onTitleUpdate, onPinToggle }: ConversationHeaderProps) {
+// Helper functions for permission mode display
+const getPermissionModeLabel = (mode: PermissionMode): string => {
+  switch (mode) {
+    case 'default': return 'Ask';
+    case 'acceptEdits': return 'Auto';
+    case 'bypassPermissions': return 'Yolo';
+    case 'plan': return 'Plan';
+    default: return 'Ask';
+  }
+};
+
+const getPermissionModeDescription = (mode: PermissionMode): string => {
+  switch (mode) {
+    case 'default': return 'Ask for permissions as needed';
+    case 'acceptEdits': return 'Allow Claude to make changes directly';
+    case 'bypassPermissions': return 'Skip all permission prompts';
+    case 'plan': return 'Create a plan without executing';
+    default: return 'Ask for permissions as needed';
+  }
+};
+
+const getPermissionModeIcon = (mode: PermissionMode) => {
+  switch (mode) {
+    case 'default':
+      return <Code2 size={14} />;
+    case 'acceptEdits':
+      return <Gauge size={14} />;
+    case 'bypassPermissions':
+      return <Rocket size={14} />;
+    case 'plan':
+      return <FileText size={14} />;
+    default:
+      return <Code2 size={14} />;
+  }
+};
+
+export function ConversationHeader({
+  title,
+  sessionId,
+  isArchived = false,
+  isPinned = false,
+  subtitle,
+  onTitleUpdate,
+  onPinToggle,
+  permissionMode = 'default',
+  isStreaming = false,
+  onPermissionModeChange
+}: ConversationHeaderProps) {
   const navigate = useNavigate();
   const [isRenaming, setIsRenaming] = useState(false);
   const [newTitle, setNewTitle] = useState(title);
   const [localTitle, setLocalTitle] = useState(title);
+  const [isPermissionDropdownOpen, setIsPermissionDropdownOpen] = useState(false);
+  const [showRestartConfirmation, setShowRestartConfirmation] = useState(false);
+  const [pendingPermissionMode, setPendingPermissionMode] = useState<PermissionMode | null>(null);
+  const [isChangingMode, setIsChangingMode] = useState(false);
 
   // Update localTitle when title prop changes
   useEffect(() => {
@@ -76,6 +134,45 @@ export function ConversationHeader({ title, sessionId, isArchived = false, isPin
     if (!sessionId) return;
     onPinToggle?.(pinned);
   };
+
+  const handlePermissionModeSelect = (mode: PermissionMode) => {
+    if (mode === permissionMode) {
+      setIsPermissionDropdownOpen(false);
+      return;
+    }
+    setPendingPermissionMode(mode);
+    setShowRestartConfirmation(true);
+    setIsPermissionDropdownOpen(false);
+  };
+
+  const handleConfirmModeChange = async () => {
+    if (!pendingPermissionMode || !onPermissionModeChange) {
+      setShowRestartConfirmation(false);
+      setPendingPermissionMode(null);
+      return;
+    }
+
+    setIsChangingMode(true);
+    try {
+      await onPermissionModeChange(pendingPermissionMode);
+    } finally {
+      setIsChangingMode(false);
+      setShowRestartConfirmation(false);
+      setPendingPermissionMode(null);
+    }
+  };
+
+  const handleCancelModeChange = () => {
+    setShowRestartConfirmation(false);
+    setPendingPermissionMode(null);
+  };
+
+  const permissionModeOptions: DropdownOption<PermissionMode>[] = [
+    { value: 'default', label: 'Ask', description: 'Ask for permissions as needed' },
+    { value: 'acceptEdits', label: 'Auto', description: 'Apply edits automatically' },
+    { value: 'bypassPermissions', label: 'Yolo', description: 'No permission prompts' },
+    { value: 'plan', label: 'Plan', description: 'Planning mode only' },
+  ];
 
   return (
     <TooltipProvider>
@@ -163,6 +260,54 @@ export function ConversationHeader({ title, sessionId, isArchived = false, isPin
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Permission Mode Toggle */}
+          {onPermissionModeChange && (
+            <DropdownSelector
+              options={permissionModeOptions}
+              value={permissionMode}
+              onChange={(value) => handlePermissionModeSelect(value as PermissionMode)}
+              isOpen={isPermissionDropdownOpen}
+              onOpenChange={setIsPermissionDropdownOpen}
+              showFilterInput={false}
+              renderOption={(option) => (
+                <div className="flex flex-col items-start gap-0.5 w-full">
+                  <div className="flex items-center gap-2">
+                    {getPermissionModeIcon(option.value as PermissionMode)}
+                    <span className="text-sm font-medium">{option.label}</span>
+                  </div>
+                  {option.description && (
+                    <span className="text-xs text-muted-foreground/80 ps-[22px]">{option.description}</span>
+                  )}
+                </div>
+              )}
+              renderTrigger={({ onClick }) => (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={onClick}
+                      disabled={isStreaming || isChangingMode}
+                      aria-label="Change permission mode"
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-normal text-foreground hover:bg-secondary transition-colors whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isChangingMode ? (
+                        <RefreshCw size={14} className="animate-spin" />
+                      ) : (
+                        getPermissionModeIcon(permissionMode)
+                      )}
+                      <span className="hidden sm:inline">{getPermissionModeLabel(permissionMode)}</span>
+                      <ChevronDown size={14} className="opacity-50" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{isStreaming ? 'Stop conversation to change mode' : getPermissionModeDescription(permissionMode)}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            />
+          )}
+
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -181,7 +326,7 @@ export function ConversationHeader({ title, sessionId, isArchived = false, isPin
               <p>{isArchived ? 'Unarchive Task' : 'Archive Task'}</p>
             </TooltipContent>
           </Tooltip>
-          
+
           {sessionId && (
             <MoreOptionsMenu
               sessionId={sessionId}
@@ -196,6 +341,50 @@ export function ConversationHeader({ title, sessionId, isArchived = false, isPin
           )}
         </div>
       </div>
+
+      {/* Restart Confirmation Dialog */}
+      {showRestartConfirmation && pendingPermissionMode && (
+        <Dialog open={showRestartConfirmation} onClose={handleCancelModeChange} title="Change Permission Mode">
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Changing the permission mode will restart the conversation with the new mode. This will resume your conversation with the "{getPermissionModeLabel(pendingPermissionMode)}" mode.
+            </p>
+            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                {getPermissionModeIcon(permissionMode)}
+                <span className="text-sm">{getPermissionModeLabel(permissionMode)}</span>
+              </div>
+              <span className="text-muted-foreground">→</span>
+              <div className="flex items-center gap-2 font-medium">
+                {getPermissionModeIcon(pendingPermissionMode)}
+                <span className="text-sm">{getPermissionModeLabel(pendingPermissionMode)}</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                onClick={handleCancelModeChange}
+                disabled={isChangingMode}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmModeChange}
+                disabled={isChangingMode}
+              >
+                {isChangingMode ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin mr-2" />
+                    Restarting...
+                  </>
+                ) : (
+                  'Restart with new mode'
+                )}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </TooltipProvider>
   );
 }

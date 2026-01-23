@@ -22,6 +22,11 @@ export interface GeminiConfig {
   model?: string;
 }
 
+/**
+ * Permission mode for Claude CLI
+ */
+export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
+
 export interface InterfaceConfig {
   colorScheme: 'light' | 'dark' | 'system';
   language: string;
@@ -36,6 +41,14 @@ export interface InterfaceConfig {
    * Will be used as: {vscodeWebUrl}/?folder={projectPath}
    */
   vscodeWebUrl?: string;
+  /**
+   * Default permission mode for new conversations
+   * - 'default': Ask for permissions as needed
+   * - 'acceptEdits': Auto-accept file edits
+   * - 'bypassPermissions': Skip all permission prompts (Yolo mode)
+   * - 'plan': Planning mode only
+   */
+  defaultPermissionMode?: PermissionMode;
   notifications?: {
     enabled: boolean;
     ntfyUrl?: string;

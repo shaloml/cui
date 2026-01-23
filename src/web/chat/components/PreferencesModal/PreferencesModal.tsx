@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, Bell, Shield, Mic, X, Cpu, Copy, Check } from 'lucide-react';
+import { Settings, Bell, Shield, Mic, X, Cpu, Copy, Check, Code2, Gauge, Rocket, FileText } from 'lucide-react';
 import { api } from '../../services/api';
-import type { Preferences, GeminiHealthResponse } from '../../types';
+import type { Preferences, GeminiHealthResponse, PermissionMode } from '../../types';
 import type { CUIConfig } from '../../../../types/config';
 import { ModelProviderTab } from './ModelProviderTab';
 import { NotificationTab } from './NotificationTab';
@@ -283,6 +283,54 @@ export function PreferencesModal({ onClose }: Props) {
                     className="w-[120px] h-9 bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700 text-center font-mono"
                     aria-label="Access code"
                   />
+                </div>
+                <div className="flex items-center justify-between min-h-[60px] py-2">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="permission-mode" className="text-sm text-neutral-900 dark:text-neutral-100 font-normal">
+                      Default Permission Mode
+                    </Label>
+                    <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                      Default mode for new conversations
+                    </span>
+                  </div>
+                  <Select
+                    value={prefs.defaultPermissionMode || 'default'}
+                    onValueChange={(value) => update({ defaultPermissionMode: value as PermissionMode })}
+                  >
+                    <SelectTrigger
+                      id="permission-mode"
+                      className="w-[160px] h-9 bg-white dark:bg-neutral-900 border-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800 focus:bg-neutral-100 dark:focus:bg-neutral-800"
+                      aria-label="Select default permission mode"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">
+                        <div className="flex items-center gap-2">
+                          <Code2 className="h-4 w-4" />
+                          <span>Ask</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="acceptEdits">
+                        <div className="flex items-center gap-2">
+                          <Gauge className="h-4 w-4" />
+                          <span>Auto</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="bypassPermissions">
+                        <div className="flex items-center gap-2">
+                          <Rocket className="h-4 w-4" />
+                          <span>Yolo</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="plan">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          <span>Plan</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex items-center justify-between min-h-[60px] py-2">
                   <div className="flex flex-col gap-1">

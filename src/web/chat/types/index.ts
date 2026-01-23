@@ -115,12 +115,15 @@ export interface WorkingDirectoriesResponse {
   totalCount: number;
 }
 
+export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan';
+
 export interface Preferences {
   colorScheme: 'light' | 'dark' | 'system';
   language: string;
   direction?: 'ltr' | 'rtl' | 'auto';
   accessCode?: string;
   vscodeWebUrl?: string;
+  defaultPermissionMode?: PermissionMode;
   notifications?: {
     enabled: boolean;
     ntfyUrl?: string;
