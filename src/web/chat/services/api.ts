@@ -279,15 +279,69 @@ class ApiService {
     const headers: Record<string, string> = {
       ...options?.headers as Record<string, string>,
     };
-    
+
     if (authToken) {
       headers.Authorization = `Bearer ${authToken}`;
     }
-    
+
     return fetch(url, {
       ...options,
       headers,
     });
+  }
+
+  // Orchestrator API methods
+  async startOrchestrator(mainSessionId: string, workingDirectory: string): Promise<{
+    orchestratorId: string;
+    streamingId: string;
+    streamUrl: string;
+    status: 'ready';
+  }> {
+    return this.apiCall('/api/orchestrator/start', {
+      method: 'POST',
+      body: JSON.stringify({ mainSessionId, workingDirectory }),
+    });
+  }
+
+  async sendOrchestratorMessage(orchestratorId: string, prompt: string): Promise<{ success: boolean }> {
+    return this.apiCall(`/api/orchestrator/${orchestratorId}/message`, {
+      method: 'POST',
+      body: JSON.stringify({ prompt }),
+    });
+  }
+
+  async injectToMain(orchestratorId: string, text: string): Promise<{ success: boolean }> {
+    return this.apiCall(`/api/orchestrator/${orchestratorId}/inject`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    });
+  }
+
+  async refreshOrchestratorContext(orchestratorId: string): Promise<{ success: boolean }> {
+    return this.apiCall(`/api/orchestrator/${orchestratorId}/refresh`, {
+      method: 'POST',
+    });
+  }
+
+  async stopOrchestrator(orchestratorId: string): Promise<{ success: boolean }> {
+    return this.apiCall(`/api/orchestrator/${orchestratorId}/stop`, {
+      method: 'POST',
+    });
+  }
+
+  async getOrchestratorInfo(orchestratorId: string): Promise<{
+    orchestratorId: string;
+    streamingId: string;
+    mainSessionId: string;
+    workingDirectory: string;
+    createdAt: string;
+    status: 'initializing' | 'ready' | 'busy' | 'stopped';
+  }> {
+    return this.apiCall(`/api/orchestrator/${orchestratorId}`);
+  }
+
+  getOrchestratorStreamUrl(orchestratorId: string): string {
+    return `/api/orchestrator/${orchestratorId}/stream`;
   }
 }
 

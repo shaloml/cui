@@ -402,5 +402,41 @@ export interface GeminiSummarizeResponse {
   keypoints: string[];
 }
 
+// Orchestrator types
+export interface OrchestratorSession {
+  orchestratorId: string;
+  streamingId: string;
+  claudeSessionId: string;
+  mainSessionId: string;
+  workingDirectory: string;
+  createdAt: string;
+  status: 'initializing' | 'ready' | 'busy' | 'stopped';
+}
+
+export interface StartOrchestratorRequest {
+  mainSessionId: string;
+  workingDirectory: string;
+}
+
+export interface StartOrchestratorResponse {
+  orchestratorId: string;
+  streamingId: string;
+  streamUrl: string;
+  status: 'ready';
+}
+
+export interface OrchestratorMessageRequest {
+  prompt: string;
+}
+
+export interface OrchestratorInjectRequest {
+  text: string;
+}
+
+export interface OrchestratorInjectResponse {
+  success: boolean;
+  message?: string;
+}
+
 export * from './config.js';
 export * from './router-config.js';

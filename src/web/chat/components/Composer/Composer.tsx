@@ -83,6 +83,7 @@ export interface ComposerProps {
 
 export interface ComposerRef {
   focusInput: () => void;
+  setValue: (value: string) => void;
 }
 
 interface DirectoryDropdownProps {
@@ -416,14 +417,24 @@ export const Composer = forwardRef<ComposerRef, ComposerProps>(function Composer
     audioData
   } = useAudioRecording();
 
-  // Expose focusInput method via ref
+  // Expose methods via ref
   useImperativeHandle(ref, () => ({
     focusInput: () => {
       if (textareaRef.current) {
         textareaRef.current.focus();
       }
+    },
+    setValue: (newValue: string) => {
+      setValue(newValue);
+      // Focus and adjust height after setting value
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          adjustTextareaHeight();
+        }
+      }, 0);
     }
-  }), []);
+  }), [setValue]);
 
   // Update local state when props change
   useEffect(() => {

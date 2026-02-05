@@ -42,6 +42,8 @@ import { createConfigRoutes } from './routes/config.routes.js';
 import { createGeminiRoutes } from './routes/gemini.routes.js';
 import { createNotificationsRoutes } from './routes/notifications.routes.js';
 import { createAuthRoutes } from './routes/auth.routes.js';
+import { createOrchestratorRoutes } from './routes/orchestrator.routes.js';
+import { OrchestratorService } from './services/orchestrator-service.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/request-logger.js';
 import { createCorsMiddleware } from './middleware/cors-setup.js';
@@ -73,6 +75,7 @@ export class CUIServer {
   private notificationService: NotificationService;
   private webPushService: WebPushService;
   private routerService?: ClaudeRouterService;
+  private orchestratorService: OrchestratorService;
   private logger: Logger;
   private port: number;
   private host: string;
@@ -116,6 +119,7 @@ export class CUIServer {
     this.workingDirectoriesService = new WorkingDirectoriesService(this.historyReader, this.logger);
     this.notificationService = new NotificationService();
     this.webPushService = WebPushService.getInstance();
+    this.orchestratorService = new OrchestratorService(this.processManager, this.historyReader, this.streamManager);
     
     // Wire up notification service
     this.processManager.setNotificationService(this.notificationService);
@@ -501,6 +505,7 @@ export class CUIServer {
     this.app.use('/api/working-directories', createWorkingDirectoriesRoutes(this.workingDirectoriesService));
     this.app.use('/api/config', createConfigRoutes(this.configService));
     this.app.use('/api/gemini', createGeminiRoutes(geminiService));
+    this.app.use('/api/orchestrator', createOrchestratorRoutes(this.orchestratorService, this.streamManager));
     
     // React Router catch-all - must be after all API routes
     const isDev = process.env.NODE_ENV === 'development';
@@ -588,7 +593,12 @@ export class CUIServer {
         // Session completion notification removed
       }
 
-      this.streamManager.closeSession(streamingId);
+      // Don't close SSE streams for orchestrator sessions - they persist across process restarts
+      if (this.orchestratorService.isOrchestratorStreamingId(streamingId)) {
+        this.logger.debug('Skipping stream close for orchestrator-managed session', { streamingId });
+      } else {
+        this.streamManager.closeSession(streamingId);
+      }
     });
 
     // Handle process errors

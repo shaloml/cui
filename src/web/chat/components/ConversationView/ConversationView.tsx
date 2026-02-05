@@ -1,10 +1,17 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { Bot } from 'lucide-react';
 import { MessageList } from '../MessageList/MessageList';
 import { Composer, ComposerRef } from '@/web/chat/components/Composer';
 import { ConversationHeader } from '../ConversationHeader/ConversationHeader';
+import { SuggestionsArea } from '../SuggestionsArea';
+import { ReviewBar } from '../ReviewBar';
+import { OrchestratorPanel } from '../OrchestratorPanel';
+import { Button } from '../ui/button';
 import { api } from '../../services/api';
-import { useStreaming, useConversationMessages } from '../../hooks';
+import { useStreaming, useConversationMessages, useOrchestrator } from '../../hooks';
+import { useReviewItems } from '../../hooks/useReviewItems';
+import { extractSuggestions, type Suggestion } from '../../utils/suggestionExtractor';
 import type { ChatMessage, ConversationDetailsResponse, ConversationMessage, ConversationSummary, FileAttachment, PermissionMode } from '../../types';
 
 export function ConversationView() {
@@ -180,6 +187,29 @@ export function ConversationView() {
     },
   });
 
+  // Extract suggestions from the last assistant message
+  const suggestions = useMemo(() => {
+    // Don't show suggestions while streaming
+    if (streamingId) return [];
+    return extractSuggestions(messages);
+  }, [messages, streamingId]);
+
+  // Handle suggestion click - fill the composer with the suggestion text
+  const handleSuggestionClick = useCallback((suggestion: Suggestion) => {
+    composerRef.current?.setValue(suggestion.text);
+  }, []);
+
+  // Extract and manage review items
+  const {
+    items: reviewItems,
+    completedCount: reviewCompletedCount,
+    toggleItem: toggleReviewItem,
+    clearCompleted: clearCompletedReviewItems
+  } = useReviewItems({ sessionId, messages });
+
+  // Orchestrator hook
+  const orchestrator = useOrchestrator();
+
   const handleSendMessage = async (message: string, workingDirectory?: string, model?: string, permissionMode?: string, attachments?: FileAttachment[]) => {
     if (!sessionId) return;
 
@@ -290,8 +320,10 @@ export function ConversationView() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background relative" role="main" aria-label="Conversation view">
-      <ConversationHeader
+    <div className="h-full flex bg-background relative" role="main" aria-label="Conversation view">
+      {/* Main conversation area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <ConversationHeader
         title={conversationSummary?.sessionInfo.custom_name || conversationTitle}
         sessionId={sessionId}
         isArchived={conversationSummary?.sessionInfo.archived || false}
@@ -350,7 +382,15 @@ export function ConversationView() {
           }
         }}
       />
-      
+
+      {/* Review Bar - shown below header when there are items to review */}
+      <ReviewBar
+        items={reviewItems}
+        completedCount={reviewCompletedCount}
+        onToggle={toggleReviewItem}
+        onClearCompleted={clearCompletedReviewItems}
+      />
+
       {error && (
         <div 
           className="bg-red-500/10 border-b border-red-500 text-red-600 dark:text-red-400 px-4 py-2 text-sm text-center animate-in slide-in-from-top duration-300"
@@ -371,7 +411,14 @@ export function ConversationView() {
         isStreaming={!!streamingId}
       />
 
-      <div 
+      {/* Suggestions Area - shown above the composer */}
+      <SuggestionsArea
+        suggestions={suggestions}
+        onSuggestionClick={handleSuggestionClick}
+        disabled={!!streamingId}
+      />
+
+      <div
         className="sticky bottom-0 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm z-10 w-full flex justify-center px-2 pb-6"
         aria-label="Message composer section"
       >
@@ -416,7 +463,27 @@ export function ConversationView() {
           />
         </div>
       </div>
+      </div>
 
+      {/* Orchestrator toggle button - shown when panel is closed */}
+      {!orchestrator.state.isOpen && (
+        <Button
+          variant="outline"
+          size="icon"
+          className="fixed right-4 top-20 z-20 h-10 w-10 rounded-full shadow-lg bg-background"
+          onClick={orchestrator.openPanel}
+          title="Open Orchestrator Panel"
+        >
+          <Bot size={18} />
+        </Button>
+      )}
+
+      {/* Orchestrator Panel */}
+      <OrchestratorPanel
+        orchestrator={orchestrator}
+        mainSessionId={sessionId}
+        workingDirectory={currentWorkingDirectory || conversationSummary?.projectPath}
+      />
     </div>
   );
 }
