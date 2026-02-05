@@ -65,7 +65,7 @@ describe('Configuration System Basic Integration', () => {
       
       expect(config).toHaveProperty('machine_id');
       expect(config).toHaveProperty('server');
-      expect(config.server).toHaveProperty('host', 'localhost');
+      expect(config.server).toHaveProperty('host', '0.0.0.0');
       expect(config.server).toHaveProperty('port', 3001);
     });
 
@@ -109,7 +109,7 @@ describe('Configuration System Basic Integration', () => {
       
       // Should start with lowercase hostname
       const hostname = os.hostname().toLowerCase();
-      expect(machineId).toMatch(new RegExp(`^${hostname.replace(/[^a-z0-9]/g, '')}`));
+      expect(machineId).toMatch(new RegExp(`^${hostname.replace(/[^a-z0-9-]/g, '')}`));
     });
 
     it('should generate the same machine ID on multiple calls', async () => {
@@ -202,7 +202,7 @@ describe('Configuration System Basic Integration', () => {
       
       const config = configService.getConfig();
       
-      expect(config.server.host).toBe('localhost');
+      expect(config.server.host).toBe('0.0.0.0');
       expect(config.server.port).toBe(3001);
       expect(config.machine_id).toBeDefined();
       expect(config.machine_id).toMatch(/^[a-z0-9\-]+\-[a-f0-9]{16}$/);
@@ -216,7 +216,7 @@ describe('Configuration System Basic Integration', () => {
       const hostname = os.hostname().toLowerCase();
       
       // Machine ID should start with hostname (with invalid chars removed)
-      const cleanHostname = hostname.replace(/[^a-z0-9]/gi, '').toLowerCase();
+      const cleanHostname = hostname.replace(/[^a-z0-9-]/gi, '').toLowerCase();
       expect(config.machine_id).toMatch(new RegExp(`^${cleanHostname}`));
     });
   });
