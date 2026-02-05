@@ -101,6 +101,7 @@ export function OrchestratorPanel({
           <div className="flex-1 overflow-hidden">
             <OrchestratorMessages
               messages={state.messages}
+              toolResults={state.toolResults}
               isStreaming={state.isStreaming && state.status === 'busy'}
             />
           </div>

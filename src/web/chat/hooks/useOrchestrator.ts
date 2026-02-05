@@ -2,13 +2,14 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import { useStreaming } from './useStreaming';
 import { useConversationMessages } from './useConversationMessages';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, ToolResult } from '../types';
 
 export interface OrchestratorState {
   isOpen: boolean;
   orchestratorId: string | null;
   streamingId: string | null;
   messages: ChatMessage[];
+  toolResults: Record<string, ToolResult>;
   isStreaming: boolean;
   isLoading: boolean;
   error: string | null;
@@ -36,6 +37,7 @@ export function useOrchestrator(): UseOrchestratorResult {
     orchestratorId: null,
     streamingId: null,
     messages: [],
+    toolResults: {},
     isStreaming: false,
     isLoading: false,
     error: null,
@@ -46,6 +48,7 @@ export function useOrchestrator(): UseOrchestratorResult {
   // Use conversation messages hook for managing orchestrator messages
   const {
     messages: orchestratorMessages,
+    toolResults: orchestratorToolResults,
     handleStreamMessage,
     clearMessages,
     addMessage
@@ -71,6 +74,11 @@ export function useOrchestrator(): UseOrchestratorResult {
   useEffect(() => {
     setState(prev => ({ ...prev, messages: orchestratorMessages }));
   }, [orchestratorMessages]);
+
+  // Update tool results in state when orchestrator tool results change
+  useEffect(() => {
+    setState(prev => ({ ...prev, toolResults: orchestratorToolResults }));
+  }, [orchestratorToolResults]);
 
   // Update streaming status
   useEffect(() => {
