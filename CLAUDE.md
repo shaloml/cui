@@ -52,7 +52,7 @@ The server is built with Express and follows a service-oriented architecture:
 React 18 application in `src/web/`:
 
 - `chat/` - Main chat interface with components, contexts, hooks
-  - `components/Home/` - TaskList, TaskItem, SubtaskDialog, MiniConversationView
+  - `components/Home/` - TaskList, TaskItem, SubtaskDialog, BatchTaskLauncher, MiniConversationView
   - `components/ConversationView/` - Main conversation view (supports `compact` mode for split view)
   - `components/SplitView/` - Multi-panel split-screen view using `react-resizable-panels`
 - `components/` - Shared UI components (Login, etc.)
@@ -87,6 +87,20 @@ CUI supports spawning parallel subtasks from any conversation. Each subtask runs
 **Important notes:**
 - Do NOT use `crypto.randomUUID()` in frontend code — it's unavailable over HTTP on non-localhost IPs. Use `Date.now()` + counter instead.
 - `useSeparateBranch` prepends a system prompt instructing Claude to create a `subtask/<description>` git branch before working.
+
+### Batch Task Launcher
+
+The Batch Task Launcher allows launching multiple independent top-level conversations in parallel from the Home page.
+
+- **Access**: Layers icon button in the Home page header toggles between single Composer and batch mode
+- **Components**: `BatchTaskLauncher.tsx` + `BatchTaskRow.tsx` in `src/web/chat/components/Home/`
+- **Features**:
+  - Each task row has its own prompt and directory (selected from recent directories)
+  - Shared model (Default/Opus/Sonnet) and permission mode (Ask/Auto/Yolo/Plan) settings apply to all tasks
+  - Enter key in a row adds a new row (if last) or focuses the next row
+  - "Launch All" fires all tasks via `Promise.allSettled()` with per-task status tracking (launching/success/error)
+  - On full success, auto-exits batch mode after 1.5s; on partial failure, keeps failed rows for retry
+- **Distinction from SubtaskDialog**: Batch creates independent top-level tasks (no `parent_session_id`); SubtaskDialog creates child tasks linked to a parent conversation
 
 ### Orchestrator Panel
 
