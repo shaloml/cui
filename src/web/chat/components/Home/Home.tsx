@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Globe, Code, Settings } from 'lucide-react';
+import { Globe, Code, Settings, Layers } from 'lucide-react';
 import { useConversations } from '../../contexts/ConversationsContext';
 import { usePreferencesContext } from '../../contexts/PreferencesContext';
 import { api } from '../../services/api';
 import { Composer, ComposerRef } from '@/web/chat/components/Composer';
+import { BatchTaskLauncher } from './BatchTaskLauncher';
 import { TaskTabs } from './TaskTabs';
 import { TaskList } from './TaskList';
 import { ProjectSettingsDialog } from '../ProjectSettingsDialog/ProjectSettingsDialog';
@@ -33,6 +34,7 @@ export function Home() {
 
   const [activeTab, setActiveTab] = useState<'tasks' | 'history' | 'archive'>('tasks');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBatchMode, setIsBatchMode] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const conversationCountRef = useRef(conversations.length);
   const composerRef = useRef<ComposerRef>(null);
@@ -266,46 +268,73 @@ export function Home() {
                   </div>
                 </div>
                 <h1 className="text-2xl font-semibold font-sans text-foreground">What is the next task?</h1>
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-7 w-7 rounded-full ${isBatchMode ? 'bg-foreground text-background hover:bg-foreground/90' : 'text-muted-foreground hover:bg-muted/50'}`}
+                        onClick={() => setIsBatchMode(!isBatchMode)}
+                      >
+                        <Layers size={14} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Batch mode</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
               
               <div className="w-full">
-                <Composer
-                  ref={composerRef}
-                  workingDirectory={recentWorkingDirectory}
-                  onSubmit={handleComposerSubmit}
-                  isLoading={isSubmitting}
-                  placeholder="Describe your task"
-                  showDirectorySelector={true}
-                  showModelSelector={true}
-                  enableFileAutocomplete={true}
-                  defaultPermissionMode={preferences?.defaultPermissionMode}
-                  recentDirectories={recentDirectories}
-                  getMostRecentWorkingDirectory={getMostRecentWorkingDirectory}
-                  onDirectoryChange={(directory) => {
-                    // Focus input after directory change
-                    setTimeout(() => {
-                      composerRef.current?.focusInput();
-                    }, 50);
-                  }}
-                  onModelChange={(model) => {
-                    // Focus input after model change
-                    setTimeout(() => {
-                      composerRef.current?.focusInput();
-                    }, 50);
-                  }}
-                  onFetchFileSystem={async (directory) => {
-                    const response = await api.listDirectory({
-                      path: directory,
-                      recursive: true,
-                      respectGitignore: true,
-                    });
-                    return response.entries;
-                  }}
-                  onFetchCommands={async (workingDirectory) => {
-                    const response = await api.getCommands(workingDirectory);
-                    return response.commands;
-                  }}
-                />
+                {isBatchMode ? (
+                  <BatchTaskLauncher
+                    recentDirectories={recentDirectories}
+                    defaultDirectory={recentWorkingDirectory}
+                    defaultPermissionMode={preferences?.defaultPermissionMode}
+                    onLaunchComplete={() => loadConversations(undefined, getFiltersForTab(activeTab))}
+                    onExitBatch={() => setIsBatchMode(false)}
+                  />
+                ) : (
+                  <Composer
+                    ref={composerRef}
+                    workingDirectory={recentWorkingDirectory}
+                    onSubmit={handleComposerSubmit}
+                    isLoading={isSubmitting}
+                    placeholder="Describe your task"
+                    showDirectorySelector={true}
+                    showModelSelector={true}
+                    enableFileAutocomplete={true}
+                    defaultPermissionMode={preferences?.defaultPermissionMode}
+                    recentDirectories={recentDirectories}
+                    getMostRecentWorkingDirectory={getMostRecentWorkingDirectory}
+                    onDirectoryChange={(directory) => {
+                      // Focus input after directory change
+                      setTimeout(() => {
+                        composerRef.current?.focusInput();
+                      }, 50);
+                    }}
+                    onModelChange={(model) => {
+                      // Focus input after model change
+                      setTimeout(() => {
+                        composerRef.current?.focusInput();
+                      }, 50);
+                    }}
+                    onFetchFileSystem={async (directory) => {
+                      const response = await api.listDirectory({
+                        path: directory,
+                        recursive: true,
+                        respectGitignore: true,
+                      });
+                      return response.entries;
+                    }}
+                    onFetchCommands={async (workingDirectory) => {
+                      const response = await api.getCommands(workingDirectory);
+                      return response.commands;
+                    }}
+                  />
+                )}
               </div>
 
               <TaskTabs 
