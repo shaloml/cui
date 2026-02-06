@@ -52,6 +52,9 @@ The server is built with Express and follows a service-oriented architecture:
 React 18 application in `src/web/`:
 
 - `chat/` - Main chat interface with components, contexts, hooks
+  - `components/Home/` - TaskList, TaskItem, SubtaskDialog, MiniConversationView
+  - `components/ConversationView/` - Main conversation view (supports `compact` mode for split view)
+  - `components/SplitView/` - Multi-panel split-screen view using `react-resizable-panels`
 - `components/` - Shared UI components (Login, etc.)
 - `inspector/` - Debug/inspection tools
 - Built with Vite, Tailwind CSS v4, Radix UI
@@ -64,11 +67,38 @@ React 18 application in `src/web/`:
 4. `StreamManager` forwards JSONL events via EventSource to frontend
 5. `PermissionTracker` handles tool permission requests via MCP server
 
+### Subtask System (Parallel Tasks)
+
+CUI supports spawning parallel subtasks from any conversation. Each subtask runs as an independent Claude conversation with a parent-child relationship.
+
+**Backend:**
+- `SessionInfo.parent_session_id` links subtasks to their parent session
+- `POST /api/conversations/start` accepts `parentSessionId` and `useSeparateBranch` fields
+- `GET /api/conversations/:sessionId/subtasks` returns all subtasks for a parent session
+- `GET /api/conversations` enriches responses with `subtaskInfo` (count/ongoing/completed) and `parentSessionId`
+- Schema version 4 adds `parent_session_id` column to sessions table
+
+**Frontend:**
+- `SubtaskDialog` (`src/web/chat/components/Home/SubtaskDialog.tsx`) - Dialog for defining and launching multiple subtasks in parallel via `Promise.allSettled()`
+- `TaskList` filters subtasks from the main list and nests them under their parent with expand/collapse
+- `TaskItem` shows subtask badge ("2/2 subtasks"), Fork button (GitFork icon), and PR button (GitPullRequest icon) on hover
+- Split View (`src/web/chat/components/SplitView/SplitView.tsx`) - Route `/split?sessions=id1,id2,...` renders up to 4 ConversationViews side-by-side using `react-resizable-panels`
+
+**Important notes:**
+- Do NOT use `crypto.randomUUID()` in frontend code — it's unavailable over HTTP on non-localhost IPs. Use `Date.now()` + counter instead.
+- `useSeparateBranch` prepends a system prompt instructing Claude to create a `subtask/<description>` git branch before working.
+
+### Orchestrator Panel
+
+The Orchestrator panel enables multi-turn conversations where Claude monitors and assists with a main conversation. Orchestrator processes run in `-p` (print mode) and use `--resume` for follow-ups. Key distinction: `claudeSessionId` (from `systemInit.session_id`) != `streamingId` (internal CUI tracking ID).
+
 ### Type System
 
 Core types in `src/types/index.ts`:
 - `StreamMessage` - System, Assistant, User, Result message types
 - `ConversationSummary`, `ConversationMessage` - Conversation data
+- `ConversationSummary.subtaskInfo` - Subtask counts for parent conversations
+- `ConversationSummary.parentSessionId` - Parent reference for subtask conversations
 - `CUIError` - Centralized error handling
 
 ## Testing
@@ -116,6 +146,7 @@ tests/
 - `express` - HTTP server
 - `better-sqlite3` - Session storage
 - `pino` - Logging
+- `react-resizable-panels` - Split view panel layout
 - React, Vite, Tailwind - Frontend
 
 ## Remote/VM Development
