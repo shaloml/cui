@@ -427,11 +427,14 @@ export const DropdownSelector = forwardRef<HTMLDivElement, DropdownSelectorProps
                       aria-disabled={option.disabled}
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        {renderOption ? renderOption(option) : (
-                          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap direction-rtl text-start">
-                            {option.label}
-                          </span>
-                        )}
+                        {(() => {
+                          const rendered = renderOption?.(option);
+                          return rendered !== undefined ? rendered : (
+                            <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap direction-rtl text-start">
+                              {option.label}
+                            </span>
+                          );
+                        })()}
                       </div>
                       {value === option.value && (
                         <div className="flex items-center justify-center min-w-[20px] text-neutral-900 dark:text-neutral-100">
