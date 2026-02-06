@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Archive, Check, X, Code2, Gauge, Rocket, FileText, ChevronDown, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Archive, Check, X, Code2, Gauge, Rocket, FileText, ChevronDown, RefreshCw, GitPullRequest } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { Button } from '@/web/chat/components/ui/button';
@@ -30,6 +30,9 @@ interface ConversationHeaderProps {
   permissionMode?: PermissionMode;
   isStreaming?: boolean;
   onPermissionModeChange?: (mode: PermissionMode) => Promise<void>;
+  // PR button
+  onCreatePR?: () => void;
+  showPRButton?: boolean;
 }
 
 // Helper functions for permission mode display
@@ -78,7 +81,9 @@ export function ConversationHeader({
   onPinToggle,
   permissionMode = 'default',
   isStreaming = false,
-  onPermissionModeChange
+  onPermissionModeChange,
+  onCreatePR,
+  showPRButton = false
 }: ConversationHeaderProps) {
   const navigate = useNavigate();
   const [isRenaming, setIsRenaming] = useState(false);
@@ -306,6 +311,28 @@ export function ConversationHeader({
                 </Tooltip>
               )}
             />
+          )}
+
+          {/* PR Button */}
+          {showPRButton && onCreatePR && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onCreatePR}
+                  disabled={isStreaming}
+                  aria-label="Create Pull Request"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-normal text-foreground hover:bg-secondary transition-colors whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <GitPullRequest size={18} className="flex-shrink-0" />
+                  <span className="hidden sm:inline">PR</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Create Pull Request</p>
+              </TooltipContent>
+            </Tooltip>
           )}
 
           <Tooltip>

@@ -90,7 +90,8 @@ export class ClaudeHistoryReader {
               archived: false,
               continuation_session_id: '',
               initial_commit_head: '',
-              permission_mode: 'default'
+              permission_mode: 'default',
+              parent_session_id: ''
             };
           }
 

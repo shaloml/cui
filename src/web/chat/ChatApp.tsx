@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout/Layout';
 import { Home } from './components/Home/Home';
 import { ConversationView } from './components/ConversationView/ConversationView';
+import { SplitView } from './components/SplitView/SplitView';
 import { ReviewPage } from './components/Review/ReviewPage';
 import { ConversationsProvider } from './contexts/ConversationsContext';
 import { StreamStatusProvider } from './contexts/StreamStatusContext';
@@ -23,6 +24,11 @@ function ChatApp() {
             <Route path="/c/:sessionId" element={
               <Layout>
                 <ConversationView />
+              </Layout>
+            } />
+            <Route path="/split" element={
+              <Layout>
+                <SplitView />
               </Layout>
             } />
             {/* Review page - standalone, opens in new tab */}

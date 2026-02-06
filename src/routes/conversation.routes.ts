@@ -162,12 +162,20 @@ export function createConversationRoutes(
       }
       
       // Prepare config with previous messages if resuming
+      // If useSeparateBranch is set, prepend system prompt instruction
+      let systemPrompt = req.body.systemPrompt;
+      if (req.body.useSeparateBranch && !req.body.resumedSessionId) {
+        const branchInstruction = 'First create and checkout a new git branch named `subtask/<short-task-description>` before making any changes.';
+        systemPrompt = systemPrompt ? `${branchInstruction}\n\n${systemPrompt}` : branchInstruction;
+      }
+
       const conversationConfig = {
         ...req.body,
+        systemPrompt,
         previousMessages: previousMessages.length > 0 ? previousMessages : undefined,
         permissionMode: req.body.permissionMode || inheritedPermissionMode
       };
-      
+
       const { streamingId, systemInit } = await processManager.startConversation(conversationConfig);
       
       // Update original session with continuation session ID if resuming
@@ -213,20 +221,25 @@ export function createConversationRoutes(
         }
       }
       
-      // Store permission mode in session info if provided
+      // Store permission mode and parent session ID in session info
+      const sessionUpdates: Partial<import('@/types/index.js').SessionInfo> = {};
       if (conversationConfig.permissionMode) {
+        sessionUpdates.permission_mode = conversationConfig.permissionMode;
+      }
+      if (req.body.parentSessionId) {
+        sessionUpdates.parent_session_id = req.body.parentSessionId;
+      }
+      if (Object.keys(sessionUpdates).length > 0) {
         try {
-          await sessionInfoService.updateSessionInfo(systemInit.session_id, {
-            permission_mode: conversationConfig.permissionMode
-          });
-          logger.debug('Stored permission mode in session info', {
+          await sessionInfoService.updateSessionInfo(systemInit.session_id, sessionUpdates);
+          logger.debug('Stored session info updates', {
             sessionId: systemInit.session_id,
-            permissionMode: conversationConfig.permissionMode
+            updates: sessionUpdates
           });
         } catch (error) {
-          logger.warn('Failed to store permission mode in session info', {
+          logger.warn('Failed to store session info updates', {
             sessionId: systemInit.session_id,
-            permissionMode: conversationConfig.permissionMode,
+            updates: sessionUpdates,
             error: error instanceof Error ? error.message : String(error)
           });
         }
@@ -319,17 +332,52 @@ export function createConversationRoutes(
         });
       }
 
+      // Enrich conversations with subtask info and parent session ID
+      const allSessionInfo = await sessionInfoService.getAllSessionInfo();
+      const enrichedConversations = allConversations.map(conversation => {
+        const enriched = { ...conversation };
+
+        // Add parentSessionId if this is a subtask
+        const sessionInfo = allSessionInfo[conversation.sessionId];
+        if (sessionInfo?.parent_session_id) {
+          enriched.parentSessionId = sessionInfo.parent_session_id;
+        }
+
+        // Count subtasks for this conversation
+        const subtasks = Object.values(allSessionInfo).filter(
+          s => s.parent_session_id === conversation.sessionId
+        );
+        if (subtasks.length > 0) {
+          const subtaskSessionIds = Object.entries(allSessionInfo)
+            .filter(([, s]) => s.parent_session_id === conversation.sessionId)
+            .map(([id]) => id);
+
+          const ongoingCount = subtaskSessionIds.filter(id => {
+            const conv = allConversations.find(c => c.sessionId === id);
+            return conv?.status === 'ongoing';
+          }).length;
+
+          enriched.subtaskInfo = {
+            count: subtasks.length,
+            ongoing: ongoingCount,
+            completed: subtasks.length - ongoingCount
+          };
+        }
+
+        return enriched;
+      });
+
       logger.debug('Conversations listed successfully', {
         requestId,
-        conversationCount: allConversations.length,
+        conversationCount: enrichedConversations.length,
         historyConversations: conversationsWithStatus.length,
         conversationsNotInHistory: conversationsNotInHistory.length,
         totalFound: result.total,
-        activeConversations: allConversations.filter(c => c.status === 'ongoing').length
+        activeConversations: enrichedConversations.filter(c => c.status === 'ongoing').length
       });
-      
+
       res.json({
-        conversations: allConversations,
+        conversations: enrichedConversations,
         total: result.total + conversationsNotInHistory.length // Update total to include conversations not in history
       });
     } catch (error) {
@@ -595,6 +643,82 @@ export function createConversationRoutes(
         requestId,
         sessionId,
         updates,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      next(error);
+    }
+  });
+
+  // Get subtasks for a session
+  router.get('/:sessionId/subtasks', async (req: RequestWithRequestId, res, next) => {
+    const requestId = req.requestId;
+    const { sessionId } = req.params;
+
+    logger.debug('Get subtasks request', { requestId, sessionId });
+
+    try {
+      const subtaskSessions = await sessionInfoService.getSubtasks(sessionId);
+      const subtasks: ConversationSummary[] = [];
+
+      for (const [subtaskId, sessionInfo] of Object.entries(subtaskSessions)) {
+        const status = statusTracker.getConversationStatus(subtaskId);
+        let summary: ConversationSummary;
+
+        try {
+          const metadata = await historyReader.getConversationMetadata(subtaskId);
+          const messages = await historyReader.fetchConversation(subtaskId);
+
+          summary = {
+            sessionId: subtaskId,
+            projectPath: metadata?.projectPath || '',
+            summary: sessionInfo.custom_name || metadata?.summary || 'Subtask',
+            sessionInfo,
+            createdAt: sessionInfo.created_at,
+            updatedAt: sessionInfo.updated_at,
+            messageCount: messages.length,
+            totalDuration: metadata?.totalDuration || 0,
+            model: metadata?.model || '',
+            status,
+            parentSessionId: sessionId
+          };
+        } catch {
+          // If history is not yet available (active session), create a minimal summary
+          summary = {
+            sessionId: subtaskId,
+            projectPath: '',
+            summary: sessionInfo.custom_name || 'Subtask',
+            sessionInfo,
+            createdAt: sessionInfo.created_at,
+            updatedAt: sessionInfo.updated_at,
+            messageCount: 0,
+            totalDuration: 0,
+            model: '',
+            status,
+            parentSessionId: sessionId
+          };
+        }
+
+        if (status === 'ongoing') {
+          const streamingId = statusTracker.getStreamingId(subtaskId);
+          if (streamingId) {
+            summary.streamingId = streamingId;
+          }
+        }
+
+        subtasks.push(summary);
+      }
+
+      logger.debug('Subtasks retrieved', {
+        requestId,
+        sessionId,
+        subtaskCount: subtasks.length
+      });
+
+      res.json({ subtasks });
+    } catch (error) {
+      logger.debug('Get subtasks failed', {
+        requestId,
+        sessionId,
         error: error instanceof Error ? error.message : String(error)
       });
       next(error);

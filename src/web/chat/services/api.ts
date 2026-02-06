@@ -100,6 +100,10 @@ class ApiService {
   }
 
 
+  async getSubtasks(sessionId: string): Promise<{ subtasks: ConversationSummary[] }> {
+    return this.apiCall(`/api/conversations/${sessionId}/subtasks`);
+  }
+
   async stopConversation(streamingId: string): Promise<{ success: boolean }> {
     return this.apiCall(`/api/conversations/${streamingId}/stop`, {
       method: 'POST',

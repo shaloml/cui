@@ -16,6 +16,7 @@ type SessionRow = {
   continuation_session_id: string;
   initial_commit_head: string;
   permission_mode: string;
+  parent_session_id: string;
 };
 
 /**
@@ -40,6 +41,7 @@ export class SessionInfoService {
   private archiveAllStmt!: Database.Statement;
   private setMetadataStmt!: Database.Statement;
   private getMetadataStmt!: Database.Statement;
+  private getSubtasksStmt!: Database.Statement;
 
   constructor(customConfigDir?: string) {
     this.logger = createLogger('SessionInfoService');
@@ -105,7 +107,8 @@ export class SessionInfoService {
           archived INTEGER NOT NULL DEFAULT 0,
           continuation_session_id TEXT NOT NULL DEFAULT '',
           initial_commit_head TEXT NOT NULL DEFAULT '',
-          permission_mode TEXT NOT NULL DEFAULT 'default'
+          permission_mode TEXT NOT NULL DEFAULT 'default',
+          parent_session_id TEXT NOT NULL DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS metadata (
           key TEXT PRIMARY KEY,
@@ -113,6 +116,7 @@ export class SessionInfoService {
         );
       `);
 
+      this.runMigrations();
       this.prepareStatements();
       this.ensureMetadata();
       this.isInitialized = true;
@@ -135,7 +139,8 @@ export class SessionInfoService {
         archived,
         continuation_session_id,
         initial_commit_head,
-        permission_mode
+        permission_mode,
+        parent_session_id
       ) VALUES (
         @session_id,
         @custom_name,
@@ -146,7 +151,8 @@ export class SessionInfoService {
         @archived,
         @continuation_session_id,
         @initial_commit_head,
-        @permission_mode
+        @permission_mode,
+        @parent_session_id
       )
     `);
     this.updateSessionStmt = this.db.prepare(`
@@ -158,6 +164,7 @@ export class SessionInfoService {
         continuation_session_id=@continuation_session_id,
         initial_commit_head=@initial_commit_head,
         permission_mode=@permission_mode,
+        parent_session_id=@parent_session_id,
         version=@version
       WHERE session_id=@session_id
     `);
@@ -167,13 +174,39 @@ export class SessionInfoService {
     this.archiveAllStmt = this.db.prepare('UPDATE sessions SET archived=1, updated_at=@updated_at WHERE archived=0');
     this.setMetadataStmt = this.db.prepare('INSERT INTO metadata (key, value) VALUES (@key, @value) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
     this.getMetadataStmt = this.db.prepare('SELECT value FROM metadata WHERE key = ?');
+    this.getSubtasksStmt = this.db.prepare('SELECT * FROM sessions WHERE parent_session_id = ?');
+  }
+
+  private runMigrations(): void {
+    // Read schema version directly (before prepared statements are ready)
+    const getMetadata = this.db.prepare('SELECT value FROM metadata WHERE key = ?');
+    const setMetadata = this.db.prepare('INSERT INTO metadata (key, value) VALUES (@key, @value) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
+
+    const schema = getMetadata.get('schema_version') as { value?: string } | undefined;
+    const currentVersion = parseInt(schema?.value || '0');
+
+    if (currentVersion < 4) {
+      // Migrate to version 4: add parent_session_id column
+      try {
+        this.db.exec(`ALTER TABLE sessions ADD COLUMN parent_session_id TEXT NOT NULL DEFAULT ''`);
+        this.logger.info('Schema migrated to version 4: added parent_session_id column');
+      } catch (e: unknown) {
+        // Column may already exist if migration was partially applied
+        if (e instanceof Error && !e.message.includes('duplicate column')) {
+          throw e;
+        }
+      }
+      setMetadata.run({ key: 'schema_version', value: '4' });
+      const now = new Date().toISOString();
+      setMetadata.run({ key: 'last_updated', value: now });
+    }
   }
 
   private ensureMetadata(): void {
     const now = new Date().toISOString();
     const schema = this.getMetadataStmt.get('schema_version') as { value?: string } | undefined;
     if (!schema) {
-      this.setMetadataStmt.run({ key: 'schema_version', value: '3' });
+      this.setMetadataStmt.run({ key: 'schema_version', value: '4' });
       this.setMetadataStmt.run({ key: 'created_at', value: now });
       this.setMetadataStmt.run({ key: 'last_updated', value: now });
     }
@@ -189,7 +222,8 @@ export class SessionInfoService {
       archived: !!row.archived,
       continuation_session_id: row.continuation_session_id,
       initial_commit_head: row.initial_commit_head,
-      permission_mode: row.permission_mode
+      permission_mode: row.permission_mode,
+      parent_session_id: row.parent_session_id || ''
     };
   }
 
@@ -205,24 +239,26 @@ export class SessionInfoService {
         custom_name: '',
         created_at: now,
         updated_at: now,
-        version: 3,
+        version: 4,
         pinned: false,
         archived: false,
         continuation_session_id: '',
         initial_commit_head: '',
-        permission_mode: 'default'
+        permission_mode: 'default',
+        parent_session_id: ''
       };
       this.insertSessionStmt.run({
         session_id: sessionId,
         custom_name: '',
         created_at: now,
         updated_at: now,
-        version: 3,
+        version: 4,
         pinned: 0,
         archived: 0,
         continuation_session_id: '',
         initial_commit_head: '',
-        permission_mode: 'default'
+        permission_mode: 'default',
+        parent_session_id: ''
       });
       this.setMetadataStmt.run({ key: 'last_updated', value: now });
       return defaultSession;
@@ -233,12 +269,13 @@ export class SessionInfoService {
         custom_name: '',
         created_at: now,
         updated_at: now,
-        version: 3,
+        version: 4,
         pinned: false,
         archived: false,
         continuation_session_id: '',
         initial_commit_head: '',
-        permission_mode: 'default'
+        permission_mode: 'default',
+        parent_session_id: ''
       };
     }
   }
@@ -262,6 +299,7 @@ export class SessionInfoService {
           continuation_session_id: updatedSession.continuation_session_id,
           initial_commit_head: updatedSession.initial_commit_head,
           permission_mode: updatedSession.permission_mode,
+          parent_session_id: updatedSession.parent_session_id,
           version: updatedSession.version
         });
         this.setMetadataStmt.run({ key: 'last_updated', value: now });
@@ -271,12 +309,13 @@ export class SessionInfoService {
           custom_name: '',
           created_at: now,
           updated_at: now,
-          version: 3,
+          version: 4,
           pinned: false,
           archived: false,
           continuation_session_id: '',
           initial_commit_head: '',
           permission_mode: 'default',
+          parent_session_id: '',
           ...updates
         };
         this.insertSessionStmt.run({
@@ -289,7 +328,8 @@ export class SessionInfoService {
           archived: newSession.archived ? 1 : 0,
           continuation_session_id: newSession.continuation_session_id,
           initial_commit_head: newSession.initial_commit_head,
-          permission_mode: newSession.permission_mode
+          permission_mode: newSession.permission_mode,
+          parent_session_id: newSession.parent_session_id
         });
         this.setMetadataStmt.run({ key: 'last_updated', value: now });
         return newSession;
@@ -376,6 +416,20 @@ export class SessionInfoService {
     return this.configDir;
   }
 
+  async getSubtasks(parentSessionId: string): Promise<Record<string, SessionInfo>> {
+    try {
+      const rows = this.getSubtasksStmt.all(parentSessionId) as Array<SessionRow & { session_id: string }>;
+      const result: Record<string, SessionInfo> = {};
+      for (const row of rows) {
+        result[row.session_id] = this.mapRow(row);
+      }
+      return result;
+    } catch (error) {
+      this.logger.error('Failed to get subtasks', { parentSessionId, error });
+      return {};
+    }
+  }
+
   async archiveAllSessions(): Promise<number> {
     this.logger.info('Archiving all sessions');
     try {
@@ -410,18 +464,20 @@ export class SessionInfoService {
           archived,
           continuation_session_id,
           initial_commit_head,
-          permission_mode
+          permission_mode,
+          parent_session_id
         ) VALUES (
           @session_id,
           '',
           @now,
           @now,
-          3,
+          4,
           0,
           0,
           '',
           '',
-          'default'
+          'default',
+          ''
         )
       `);
       const transaction = this.db.transaction((ids: string[]) => {

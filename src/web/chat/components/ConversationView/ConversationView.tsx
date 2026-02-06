@@ -14,8 +14,14 @@ import { useReviewItems } from '../../hooks/useReviewItems';
 import { extractSuggestions, type Suggestion } from '../../utils/suggestionExtractor';
 import type { ChatMessage, ConversationDetailsResponse, ConversationMessage, ConversationSummary, FileAttachment, PermissionMode } from '../../types';
 
-export function ConversationView() {
-  const { sessionId } = useParams<{ sessionId: string }>();
+interface ConversationViewProps {
+  compact?: boolean;
+  sessionIdOverride?: string;
+}
+
+export function ConversationView({ compact = false, sessionIdOverride }: ConversationViewProps = {}) {
+  const params = useParams<{ sessionId: string }>();
+  const sessionId = sessionIdOverride || params.sessionId;
   const location = useLocation();
   const navigate = useNavigate();
   const [streamingId, setStreamingId] = useState<string | null>(null);
@@ -252,6 +258,23 @@ export function ConversationView() {
     }
   };
 
+  const handleCreatePR = async () => {
+    if (!sessionId || !conversationSummary?.sessionInfo.initial_commit_head) return;
+
+    try {
+      const commitHead = conversationSummary.sessionInfo.initial_commit_head;
+      const response = await api.startConversation({
+        workingDirectory: currentWorkingDirectory || conversationSummary.projectPath,
+        initialPrompt: `Create a pull request for the changes made since commit ${commitHead}. Use gh CLI. Include a descriptive title and summary.`,
+        permissionMode: conversationSummary.sessionInfo.permission_mode || undefined,
+      });
+      navigate(`/c/${response.sessionId}`);
+    } catch (err: any) {
+      console.error('Failed to create PR conversation:', err);
+      setError(err.message || 'Failed to create PR conversation');
+    }
+  };
+
   const handlePermissionModeChange = async (newMode: PermissionMode) => {
     if (!sessionId) return;
 
@@ -320,7 +343,7 @@ export function ConversationView() {
   };
 
   return (
-    <div className="h-full flex bg-background relative" role="main" aria-label="Conversation view">
+    <div className={`h-full flex bg-background relative ${compact ? '' : ''}`} role="main" aria-label="Conversation view">
       {/* Main conversation area */}
       <div className="flex-1 flex flex-col min-w-0">
         <ConversationHeader
@@ -370,6 +393,8 @@ export function ConversationView() {
             console.error('Failed to refresh conversation after rename:', error);
           }
         }}
+        showPRButton={!streamingId && !!conversationSummary?.sessionInfo.initial_commit_head}
+        onCreatePR={handleCreatePR}
         onPinToggle={async (isPinned) => {
           if (conversationSummary) {
             setConversationSummary({
@@ -465,8 +490,8 @@ export function ConversationView() {
       </div>
       </div>
 
-      {/* Orchestrator toggle button - shown when panel is closed */}
-      {!orchestrator.state.isOpen && (
+      {/* Orchestrator toggle button - shown when panel is closed, hidden in compact mode */}
+      {!compact && !orchestrator.state.isOpen && (
         <Button
           variant="outline"
           size="icon"
@@ -478,12 +503,14 @@ export function ConversationView() {
         </Button>
       )}
 
-      {/* Orchestrator Panel */}
-      <OrchestratorPanel
-        orchestrator={orchestrator}
-        mainSessionId={sessionId}
-        workingDirectory={currentWorkingDirectory || conversationSummary?.projectPath}
-      />
+      {/* Orchestrator Panel - hidden in compact mode */}
+      {!compact && (
+        <OrchestratorPanel
+          orchestrator={orchestrator}
+          mainSessionId={sessionId}
+          workingDirectory={currentWorkingDirectory || conversationSummary?.projectPath}
+        />
+      )}
     </div>
   );
 }

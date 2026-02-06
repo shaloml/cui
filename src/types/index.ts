@@ -46,6 +46,8 @@ export interface ConversationSummary {
   status: 'completed' | 'ongoing' | 'pending'; // Conversation status based on active streams
   streamingId?: string; // CUI's internal streaming ID (only present when status is 'ongoing')
   toolMetrics?: ToolMetrics; // Optional tool usage metrics
+  subtaskInfo?: { count: number; ongoing: number; completed: number }; // Subtask counts
+  parentSessionId?: string; // Parent session ID if this is a subtask
 }
 
 export interface ConversationMessage {
@@ -169,6 +171,8 @@ export interface StartConversationRequest {
   permissionMode?: string; // Permission mode: "acceptEdits" | "bypassPermissions" | "default" | "plan"
   resumedSessionId?: string; // Optional: session ID to resume from
   attachments?: FileAttachment[]; // Optional: file attachments
+  parentSessionId?: string; // Optional: parent session ID for subtasks
+  useSeparateBranch?: boolean; // Optional: instruct Claude to create & work on a new branch
 }
 
 
@@ -311,6 +315,7 @@ export interface SessionInfo {
   continuation_session_id: string; // ID of the continuation session if exists, default: ""
   initial_commit_head: string;  // Git commit HEAD when session started, default: ""
   permission_mode: string;      // Permission mode used for the session, default: "default"
+  parent_session_id: string;    // Parent session ID for subtasks, default: "" (top-level)
 }
 
 

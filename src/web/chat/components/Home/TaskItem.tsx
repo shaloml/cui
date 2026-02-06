@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StopCircle, Archive, Check, X, Code } from 'lucide-react';
+import { StopCircle, Archive, Check, X, Code, GitFork, GitPullRequest, ChevronRight, ChevronDown } from 'lucide-react';
 import { Button } from '@/web/chat/components/ui/button';
 import { Input } from '@/web/chat/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/web/chat/components/ui/tooltip';
@@ -25,12 +25,19 @@ interface TaskItemProps {
   isArchived?: boolean;
   isPinned?: boolean;
   vscodeWebUrl?: string;
+  subtaskInfo?: { count: number; ongoing: number; completed: number };
+  initialCommitHead?: string;
+  isExpanded?: boolean;
   onClick: () => void;
   onCancel?: () => void;
   onArchive?: () => void;
   onUnarchive?: () => void;
   onNameUpdate?: () => void;
   onPinToggle?: (isPinned: boolean) => void;
+  onCreateSubtasks?: () => void;
+  onCreatePR?: () => void;
+  onToggleExpand?: () => void;
+  children?: React.ReactNode;
 }
 
 export function TaskItem({
@@ -46,6 +53,9 @@ export function TaskItem({
   isArchived = false,
   isPinned = false,
   vscodeWebUrl,
+  subtaskInfo,
+  initialCommitHead,
+  isExpanded = false,
   isRenaming = false,
   onClick,
   onCancel,
@@ -54,7 +64,11 @@ export function TaskItem({
   onStartRename,
   onCancelRename,
   onNameUpdate,
-  onPinToggle
+  onPinToggle,
+  onCreateSubtasks,
+  onCreatePR,
+  onToggleExpand,
+  children
 }: TaskItemProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [newName, setNewName] = useState(title);
@@ -63,7 +77,7 @@ export function TaskItem({
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
@@ -99,13 +113,13 @@ export function TaskItem({
   };
 
   return (
-    <div 
+    <div
       className="relative group hover:bg-muted/30 focus-within:border-l-2 focus-within:border-accent"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <a 
-        className="block no-underline text-inherit outline-offset-[-1px] focus-within:rounded-lg" 
+      <a
+        className="block no-underline text-inherit outline-offset-[-1px] focus-within:rounded-lg"
         onClick={(e) => {
           if (isRenaming) {
             e.preventDefault();
@@ -124,6 +138,19 @@ export function TaskItem({
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-5 w-full px-4 py-3.5 border-b border-border/30 text-sm">
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1.5 w-full min-w-0 text-foreground">
+              {/* Expand/collapse toggle for tasks with subtasks */}
+              {subtaskInfo && subtaskInfo.count > 0 && onToggleExpand && (
+                <button
+                  className="shrink-0 p-0.5 rounded hover:bg-muted/50 text-muted-foreground"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleExpand();
+                  }}
+                >
+                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+              )}
               {isRenaming ? (
                 <div className="flex items-center gap-1.5 flex-1">
                   <Input
@@ -180,7 +207,7 @@ export function TaskItem({
               </span>
               <span className="text-muted-foreground">·</span>
               <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                {projectPath 
+                {projectPath
                   ? (recentDirectories[projectPath]?.shortname || projectPath.split('/').pop() || projectPath)
                   : 'No project'}
               </span>
@@ -190,9 +217,18 @@ export function TaskItem({
                   <span className="text-muted-foreground">{messageCount}</span>
                 </>
               )}
+              {/* Subtask badge */}
+              {subtaskInfo && subtaskInfo.count > 0 && (
+                <>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="text-xs font-medium text-accent-foreground bg-accent/50 px-1.5 py-0.5 rounded-full">
+                    {subtaskInfo.completed}/{subtaskInfo.count} subtasks
+                  </span>
+                </>
+              )}
             </div>
           </div>
-          
+
           {status === 'ongoing' && (
             <div className="flex items-center gap-2">
               <span className={`animate-pulse bg-gradient-to-r from-muted-foreground via-muted-foreground to-muted-foreground/50 bg-[length:200%_100%] bg-clip-text text-transparent ${liveStatus ? 'animate-[shimmer_2s_linear_infinite]' : ''}`}>
@@ -223,10 +259,62 @@ export function TaskItem({
               </TooltipProvider>
             </div>
           )}
-          
-          {status === 'completed' && isHovered && (
+
+          {(status === 'completed' || status === 'ongoing') && isHovered && (
             <div className="flex items-center gap-2">
-              {vscodeWebUrl && projectPath && (
+              {/* Fork (create subtasks) button */}
+              {onCreateSubtasks && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-6 h-6 rounded-full hover:bg-muted/50"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onCreateSubtasks();
+                        }}
+                        aria-label="Create subtasks"
+                        type="button"
+                      >
+                        <GitFork size={16} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Create subtasks</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {/* PR button for completed tasks with initialCommitHead */}
+              {status === 'completed' && initialCommitHead && onCreatePR && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-6 h-6 rounded-full hover:bg-muted/50"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onCreatePR();
+                        }}
+                        aria-label="Create PR"
+                        type="button"
+                      >
+                        <GitPullRequest size={16} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Create pull request</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {vscodeWebUrl && projectPath && status === 'completed' && (
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -247,48 +335,78 @@ export function TaskItem({
                   </Tooltip>
                 </TooltipProvider>
               )}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="w-6 h-6 rounded-full hover:bg-muted/50"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (isArchived) {
-                          onUnarchive?.();
-                        } else {
-                          onArchive?.();
-                        }
-                      }}
-                      aria-label={isArchived ? "Unarchive task" : "Archive task"}
-                      type="button"
-                    >
-                      <Archive size={21} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{isArchived ? "Unarchive task" : "Archive task"}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                <MoreOptionsMenu
-                  sessionId={_id}
-                  currentName={title}
-                  isPinned={isPinned}
-                  onRename={() => {
-                    onStartRename?.();
-                    setNewName(title);
-                  }}
-                  onPinToggle={onPinToggle}
-                />
-              </div>
+              {status === 'completed' && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-6 h-6 rounded-full hover:bg-muted/50"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (isArchived) {
+                            onUnarchive?.();
+                          } else {
+                            onArchive?.();
+                          }
+                        }}
+                        aria-label={isArchived ? "Unarchive task" : "Archive task"}
+                        type="button"
+                      >
+                        <Archive size={21} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{isArchived ? "Unarchive task" : "Archive task"}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {status === 'completed' && (
+                <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                  <MoreOptionsMenu
+                    sessionId={_id}
+                    currentName={title}
+                    isPinned={isPinned}
+                    onRename={() => {
+                      onStartRename?.();
+                      setNewName(title);
+                    }}
+                    onPinToggle={onPinToggle}
+                  />
+                </div>
+              )}
+              {/* Stop button for ongoing */}
+              {status === 'ongoing' && onCancel && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="w-6 h-6 rounded-full hover:bg-muted/50"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onCancel();
+                        }}
+                        aria-label="Stop task"
+                        type="button"
+                      >
+                        <StopCircle size={24} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Stop task</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           )}
-          
+
           {status !== 'ongoing' && !isHovered && toolMetrics && (toolMetrics.linesAdded > 0 || toolMetrics.linesRemoved > 0) && (
             <div className="flex items-center gap-2 text-xs">
               {toolMetrics.linesAdded > 0 && (
@@ -301,6 +419,8 @@ export function TaskItem({
           )}
         </div>
       </a>
+      {/* Expandable children (subtask list, mini conversation view) */}
+      {children}
     </div>
   );
 }
