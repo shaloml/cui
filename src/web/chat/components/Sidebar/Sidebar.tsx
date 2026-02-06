@@ -50,9 +50,8 @@ export function Sidebar({ onNewProject }: SidebarProps) {
 
   // Handler to open VS Code Web
   const handleOpenVSCode = useCallback((project: ProjectInfo) => {
-    if (!vscodeWebUrl) return;
-    // Construct VS Code Web URL with project folder
-    const vsCodeUrl = `${vscodeWebUrl}/?folder=${encodeURIComponent(project.path)}`;
+    const baseUrl = vscodeWebUrl || 'http://localhost:8080';
+    const vsCodeUrl = `${baseUrl}/?folder=${encodeURIComponent(project.path)}`;
     window.open(vsCodeUrl, `vscode-${project.shortname}`);
   }, [vscodeWebUrl]);
 

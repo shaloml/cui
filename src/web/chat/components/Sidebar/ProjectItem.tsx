@@ -47,8 +47,6 @@ export function ProjectItem({
     onConfigureProject?.();
   };
 
-  // Check if VS Code button should be shown (needs vscodeWebUrl preference)
-  const canOpenVSCode = !!vscodeWebUrl;
   // Check if Review button should be shown (needs devServerUrl configured)
   const canOpenReview = !!project.devServerUrl;
 
@@ -102,22 +100,20 @@ export function ProjectItem({
             </Tooltip>
           )}
 
-          {/* VS Code button - only show if vscodeWebUrl preference is set */}
-          {canOpenVSCode && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={handleVSCodeClick}
-                  className="p-1 rounded hover:bg-background/50 transition-colors"
-                >
-                  <Code size={14} />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                <p>Open VS Code</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
+          {/* VS Code button - always visible */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={handleVSCodeClick}
+                className="p-1 rounded hover:bg-background/50 transition-colors"
+              >
+                <Code size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p>Open VS Code</p>
+            </TooltipContent>
+          </Tooltip>
 
           {/* Settings button */}
           <Tooltip>
