@@ -54,8 +54,9 @@ export function Home() {
 
   // Handler to open VS Code Web
   const handleOpenVSCode = useCallback(() => {
-    if (!vscodeWebUrl || !selectedProjectInfo) return;
-    const vsCodeUrl = `${vscodeWebUrl}/?folder=${encodeURIComponent(selectedProjectInfo.path)}`;
+    if (!selectedProjectInfo) return;
+    const baseUrl = vscodeWebUrl || 'http://localhost:8080';
+    const vsCodeUrl = `${baseUrl}/?folder=${encodeURIComponent(selectedProjectInfo.path)}`;
     window.open(vsCodeUrl, `vscode-${selectedProjectInfo.shortname}`);
   }, [vscodeWebUrl, selectedProjectInfo]);
 
@@ -211,25 +212,23 @@ export function Home() {
                           </Tooltip>
                         )}
 
-                        {/* VS Code button - only show if vscodeWebUrl is configured */}
-                        {vscodeWebUrl && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 gap-1.5 text-xs"
-                                onClick={handleOpenVSCode}
-                              >
-                                <Code size={14} />
-                                VS Code
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Open in VS Code Web</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
+                        {/* VS Code button - always visible, falls back to localhost:8080 */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 gap-1.5 text-xs"
+                              onClick={handleOpenVSCode}
+                            >
+                              <Code size={14} />
+                              VS Code
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Open in VS Code Web</p>
+                          </TooltipContent>
+                        </Tooltip>
 
                         {/* Settings button */}
                         <Tooltip>
