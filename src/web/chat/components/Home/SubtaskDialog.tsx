@@ -6,6 +6,11 @@ import { Input } from '@/web/chat/components/ui/input';
 import { Checkbox } from '@/web/chat/components/ui/checkbox';
 import { api } from '../../services/api';
 
+let idCounter = 0;
+function generateId(): string {
+  return `subtask-${Date.now()}-${++idCounter}`;
+}
+
 interface SubtaskRow {
   id: string;
   description: string;
@@ -32,7 +37,7 @@ export function SubtaskDialog({
   onSubtasksLaunched
 }: SubtaskDialogProps) {
   const [subtasks, setSubtasks] = useState<SubtaskRow[]>([
-    { id: crypto.randomUUID(), description: '', useSeparateBranch: false }
+    { id: generateId(), description: '', useSeparateBranch: false }
   ]);
   const [isLaunching, setIsLaunching] = useState(false);
   const [launchProgress, setLaunchProgress] = useState({ current: 0, total: 0 });
@@ -40,7 +45,7 @@ export function SubtaskDialog({
   const addRow = () => {
     setSubtasks(prev => [
       ...prev,
-      { id: crypto.randomUUID(), description: '', useSeparateBranch: false }
+      { id: generateId(), description: '', useSeparateBranch: false }
     ]);
   };
 
@@ -85,7 +90,7 @@ export function SubtaskDialog({
     onClose();
 
     // Reset form
-    setSubtasks([{ id: crypto.randomUUID(), description: '', useSeparateBranch: false }]);
+    setSubtasks([{ id: generateId(), description: '', useSeparateBranch: false }]);
   };
 
   const validCount = subtasks.filter(s => s.description.trim()).length;
